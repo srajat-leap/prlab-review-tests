@@ -2,56 +2,123 @@
 
 Pass/fail tests for PR review tools on the cricket scoring estate.
 
-Product repositories stay blind. This repo owns the cases, the code-only patches, the PR generator, and the scorers. A product PR must not mention traps, hops, or this harness.
+Cases describe a product change and the **claim** a review must assert. They are not tied to a vendor. Each tool is a plugin: trigger text, bot login, and optional cluster config.
 
-## Isolation
-
-During a Greptile run, the only allowed bot commenter is `greptile-apps[bot]`. The runner account posts one `@greptileai` comment and nothing else. Cursor, Bugbot, and other review tools stay off these PRs until we add cases for them — then those bots may comment too.
-
-Do not mention this repo, `TRAPS.md`, hop numbers, or expected findings in a product PR title, body, or commit message.
-
-## Two named Greptile tests
-
-| Test | What the bot sees | How it is set |
-|---|---|---|
-| `greptile-cold` | One repo, no cluster | Protocol PR has no `greptile.json` |
-| `greptile-cluster` | Protocol plus named siblings | Same protocol patch plus `greptile.json` `context.repos` for scoring, stats, and fantasy |
-
-Every other case is single-repo and is scored under `greptile-cold`.
+Product repositories stay blind. A product PR must not mention this harness, hop numbers, or expected findings.
 
 ## Layout
 
 ```
-cases/cases.json     # pass/fail expectations
-patches/             # code-only diffs against product main
-scripts/generate_prs.py
-scripts/score_greptile.py
+cases/cases.json          # tool-agnostic cases
+patches/                  # code-only diffs
+src/prlab_eval/tools/     # one module per review product
+tests/unit/               # matcher and case tests
+tests/eval/               # live setup → execute → assert
+reports/                  # written by pytest
 ```
 
-## Generate PRs (does not trigger a bot)
+## Contexts
 
-From this directory, with the eleven product clones as siblings:
+| Context | What the tool sees |
+|---|---|
+| `single-repo` | The PR repo only |
+| `cluster` | The PR repo plus `cluster_repos` (protocol → scoring, stats, fantasy) |
+
+The same case can be scored by any registered tool.
+
+| Column | Meaning |
+|---|---|
+| Expected finding | The trap. What a correct review must mean. |
+| Actual PR comment | The tool's GitHub comment(s), not the judge. |
+| Judge verdict | Whether those comments assert the expected finding, plus a short reason. |
+| Judge evidence | Substring the judge copied from the comment. |
+| Recall | Expected findings asserted / expected findings. |
+| Precision | PR comments that support an asserted finding / all PR comments. Extra nits lower precision. |
+| Isolation | Process check. Only the selected tool's bot may review. Use `--allow-bots` to opt another bot in. |
+| Context | What the tool was allowed to see. |
+| Tokens | Diagnostic keyword check. Not used for pass/fail. |
+
+## Install
 
 ```bash
-python3 scripts/generate_prs.py
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 ```
 
-That opens one PR per case on `eval/<id>` and leaves it open. Inspect the diffs. Then, after Greptile is reconnected to the product remotes:
+## Tests
+
+Case **data** lives in `cases/cases.json`. Each case is one pytest node, so the terminal shows per-case status:
+
+```
+tests/eval/test_reviews.py::test_review_tool_flags_regression[stats-count-not-out] FAILED
+```
+
+Do not write one hand-copied test function per trap. Add a JSON case; pytest picks it up.
 
 ```bash
-python3 scripts/generate_prs.py --trigger-greptile
+pytest                    # unit tests
+pytest tests/eval --run-eval --tool greptile --judge-provider gemini
 ```
 
-`--trigger-greptile` posts `@greptileai` from the runner account. Omit it until you have checked the PRs.
+## Eval a tool (live GitHub)
 
-## Score
+1. **Setup** — PRs already open. Re-run only if you need to recreate them:
 
 ```bash
-python3 scripts/score_greptile.py
+python3 -m prlab_eval setup
 ```
 
-A case passes when `greptile-apps[bot]` comments match every `must_flag` regex. Isolation fails if anyone else comments before you opt a second tool in.
+2. **Trigger** — mention the tool once per open eval PR. Skips PRs that already have the mention:
+
+```bash
+python3 -m prlab_eval trigger --tool greptile
+```
+
+3. **Execute + assert** — collect comments and score claims with a temperature-0 judge. You do not need an OpenAI key. Add `--wait` if reviews are still landing.
+
+Free judge options (first match wins if you set nothing):
+
+| Provider | Cost | Setup |
+|---|---|---|
+| **Groq** | Free tier | [console.groq.com](https://console.groq.com) → `export GROQ_API_KEY=...` |
+| **Gemini** | Free tier | [aistudio.google.com](https://aistudio.google.com) → `export GEMINI_API_KEY=...` |
+| **Ollama** | Local, free | `ollama pull llama3.2` then `--judge-provider ollama` |
+| **GitHub Models** | Free with `gh` | `gh auth login` then `--judge-provider github` |
+
+```bash
+export GROQ_API_KEY=...
+# default Groq model is openai/gpt-oss-120b
+pytest tests/eval --run-eval --tool greptile --judge-provider groq
+
+# or Qwen 3.8 27B
+pytest tests/eval --run-eval --tool greptile --judge-provider groq --judge-model qwen/qwen3.8-27b
+```
+
+Eval pings the judge once before any case. A bad key or model stops the session immediately.
+
+```bash
+python3 -m prlab_eval judge-check --provider openai
+```
+
+`--trigger` on pytest still works as a one-shot. It uses the same skip-if-already-mentioned check. Prefer the separate `trigger` command so you can inspect the comments before scoring.
+
+Reports written under `reports/`:
+
+- `latest.md` / `latest.json` — one row per case
+- `report.html` — pytest-html (self-contained)
+
+## Add a tool
+
+1. Create `src/prlab_eval/tools/<name>.py` with `name`, `bot_logins`, `trigger_body`, `context_files`, `collect`, and `trigger`.
+2. Register it in `src/prlab_eval/tools/__init__.py`.
+3. Run `pytest tests/eval --run-eval --tool <name>`.
+
+Cases do not change.
+
+## Isolation
+
+The runner account may post the tool's trigger comment. Unexpected `[bot]` logins fail isolation unless listed in `--allow-bots`. Leave Cursor and other reviewers off a run until you opt them in.
 
 ## Product remotes
 
-`srajat-leap/prlab-cricket-*` — public. This harness is `srajat-leap/prlab-review-tests`.
+`srajat-leap/prlab-cricket-*`. This harness is `srajat-leap/prlab-review-tests`.

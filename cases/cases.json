@@ -1,203 +1,250 @@
 [
   {
     "id": "protocol-default-confirm-cold",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-protocol",
     "local": "cricket-protocol",
     "patch": "patches/protocol-default-confirm.patch",
     "branch": "eval/protocol-default-confirm-cold",
     "title": "Default umpire_confirmed for older mobile clients",
     "body": "Older mobile clients sometimes omit umpire_confirmed.\nDefault the field so historical payloads still parse.\nSchema and unit tests updated.",
-    "must_flag": [
-      "umpire_confirmed",
-      "(omitted|default|missing)",
-      "wicket"
+    "claims": [
+      {
+        "id": "omitted-confirm-counts-wicket",
+        "must_assert": "If umpire_confirmed is omitted on a dismissal, this change treats the dismissal as confirmed, so an unconfirmed appeal can be counted as a wicket.",
+        "tokens": ["umpire_confirmed", "(omitted|default|missing)", "wicket"]
+      }
     ]
   },
   {
     "id": "protocol-default-confirm-cluster",
-    "test": "greptile-cluster",
+    "context": "cluster",
+    "cluster_repos": [
+      "srajat-leap/prlab-cricket-scoring",
+      "srajat-leap/prlab-cricket-stats",
+      "srajat-leap/prlab-cricket-fantasy"
+    ],
     "github_repo": "srajat-leap/prlab-cricket-protocol",
     "local": "cricket-protocol",
     "patch": "patches/protocol-default-confirm.patch",
-    "extra_files": {
-      "greptile.json": "patches/greptile.cluster.json"
-    },
     "branch": "eval/protocol-default-confirm-cluster",
     "title": "Default umpire_confirmed for older mobile clients (compat)",
     "body": "Older mobile clients sometimes omit umpire_confirmed.\nDefault the field so historical payloads still parse.\nAdds a repo-context file for services that consume this contract.",
-    "must_flag": [
-      "umpire_confirmed",
-      "(omitted|default|missing)",
-      "wicket"
+    "claims": [
+      {
+        "id": "omitted-confirm-counts-wicket",
+        "must_assert": "If umpire_confirmed is omitted on a dismissal, this change treats the dismissal as confirmed, so an unconfirmed appeal can be counted as a wicket.",
+        "tokens": ["umpire_confirmed", "(omitted|default|missing)", "wicket"]
+      },
+      {
+        "id": "names-downstream-consumer",
+        "must_assert": "The review says this protocol change can affect a downstream scoring, stats, or fantasy consumer — for example scoring counting the wicket, the ledger copying it, or fantasy paying bowling points. Naming the field default alone is not enough.",
+        "tokens": ["(scoring|stats|fantasy|ledger|points)"]
+      }
     ]
   },
   {
     "id": "scoring-leak-raw-ball",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-scoring",
     "local": "cricket-scoring",
     "patch": "patches/scoring-leak-raw-ball.patch",
     "branch": "eval/scoring-leak-raw-ball",
     "title": "Expose raw_ball on snapshots for on-call debugging",
     "body": "On-call asked for the original ball payload next to the snapshot.\nAdd raw_ball as a debug envelope. Product clients should ignore it.",
-    "must_flag": [
-      "raw_ball",
-      "(leak|protocol|BallEvent|product)"
+    "claims": [
+      {
+        "id": "raw-ball-leaks-protocol",
+        "must_assert": "Publishing raw_ball on the snapshot leaks protocol or BallEvent fields to product clients that should only see the score snapshot.",
+        "tokens": ["raw_ball", "(leak|protocol|BallEvent|product)"]
+      }
     ]
   },
   {
     "id": "scoring-publish-match-pack",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-scoring",
     "local": "cricket-scoring",
     "patch": "patches/scoring-publish-match-pack.patch",
     "branch": "eval/scoring-publish-match-pack",
     "title": "Nested match pack for overlay clients",
     "body": "Graphics asked for a structured match pack instead of parsing last_event strings.\nPublish match.innings.latest_over.latest_delivery on the snapshot.",
-    "must_flag": [
-      "(match pack|latest_delivery|umpire_confirmed|extras)",
-      "(leak|re-export|protocol|product)"
+    "claims": [
+      {
+        "id": "match-pack-reexports-protocol",
+        "must_assert": "The nested match pack re-exports protocol details such as extras or umpire_confirmed to product clients instead of keeping those fields inside scoring.",
+        "tokens": ["(match pack|latest_delivery|umpire_confirmed|extras)", "(leak|re-export|protocol|product)"]
+      }
     ]
   },
   {
     "id": "broadcast-couple-raw-ball",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-broadcast",
     "local": "cricket-broadcast",
     "patch": "patches/broadcast-couple-raw-ball.patch",
     "branch": "eval/broadcast-couple-raw-ball",
     "title": "Richer wide and no-ball animations from raw_ball",
     "body": "When scoring includes raw_ball, use extras.type and umpire_confirmed so wides and appeals look right on TV.",
-    "must_flag": [
-      "raw_ball",
-      "(umpire_confirmed|extras)"
+    "claims": [
+      {
+        "id": "raw-ball-bypasses-last-event",
+        "must_assert": "Animating from raw_ball extras or umpire_confirmed bypasses scoring's last_event and can treat a missing confirmation as a wicket.",
+        "tokens": ["raw_ball", "(umpire_confirmed|extras)"]
+      }
     ]
   },
   {
     "id": "broadcast-law-of-demeter",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-broadcast",
     "local": "cricket-broadcast",
     "patch": "patches/broadcast-law-of-demeter.patch",
     "branch": "eval/broadcast-law-of-demeter",
     "title": "Walk the match pack for overlay animations",
     "body": "Prefer match.innings.latest_over.latest_delivery when the snapshot includes it so the truck does not parse last_event display strings.",
-    "must_flag": [
-      "(latest_delivery|match\\.innings|umpire_confirmed)",
-      "(last_event|wicket|extras)"
+    "claims": [
+      {
+        "id": "match-pack-walk-couples-protocol",
+        "must_assert": "Walking match.innings.latest_over.latest_delivery couples broadcast to protocol extras or wicket confirmation instead of trusting last_event.",
+        "tokens": ["(latest_delivery|match\\.innings|umpire_confirmed)", "(last_event|wicket|extras)"]
+      }
     ]
   },
   {
     "id": "stats-count-not-out",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-stats",
     "local": "cricket-stats",
     "patch": "patches/stats-count-not-out.patch",
     "branch": "eval/stats-count-not-out",
     "title": "Count NOT_OUT toward dismissal volume",
     "body": "Analytics wants appeal volume in the wicket total. Most referrals are upheld, so increment wickets when last_event.display is NOT_OUT.",
-    "must_flag": [
-      "NOT_OUT",
-      "wicket"
+    "claims": [
+      {
+        "id": "not-out-counted-as-wicket",
+        "must_assert": "Incrementing wickets when the display is NOT_OUT counts an appeal as a dismissal even though scoring said the batter was not out.",
+        "tokens": ["NOT_OUT", "wicket"]
+      }
     ]
   },
   {
     "id": "fantasy-pay-last-ball",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-fantasy",
     "local": "cricket-fantasy",
     "patch": "patches/fantasy-pay-last-ball.patch",
     "branch": "eval/fantasy-pay-last-ball",
     "title": "Settle bowling from last_ball when the ledger includes it",
     "body": "If the ledger carries last_ball.wicket, award bowling points from that wicket instead of only from ledger.wickets. Missing confirmation is treated as given.",
-    "must_flag": [
-      "(last_ball|umpire_confirmed)",
-      "(wicket|bowling|points)"
+    "claims": [
+      {
+        "id": "missing-confirm-pays-wicket",
+        "must_assert": "Settling bowling from last_ball.wicket when confirmation is missing awards wicket points that the ledger wicket total did not grant.",
+        "tokens": ["(last_ball|umpire_confirmed)", "(wicket|bowling|points)"]
+      }
     ]
   },
   {
     "id": "highlights-clip-appeals",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-highlights",
     "local": "cricket-highlights",
     "patch": "patches/highlights-clip-appeals.patch",
     "branch": "eval/highlights-clip-appeals",
     "title": "File NOT_OUT appeals as wicket clips",
     "body": "Editors search kind=wicket for the same replay package. Treat NOT_OUT as a wicket clip.",
-    "must_flag": [
-      "NOT_OUT",
-      "wicket"
+    "claims": [
+      {
+        "id": "appeal-filed-as-wicket-clip",
+        "must_assert": "Treating NOT_OUT as a wicket clip mislabels an appeal as a wicket highlight.",
+        "tokens": ["NOT_OUT", "wicket"]
+      }
     ]
   },
   {
     "id": "social-post-appeals",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-social",
     "local": "cricket-social",
     "patch": "patches/social-post-appeals.patch",
     "branch": "eval/social-post-appeals",
     "title": "Post WICKET when highlight kind is appeal",
     "body": "Keep the timeline live during reviews. Post WICKET when highlights returns kind=appeal.",
-    "must_flag": [
-      "appeal",
-      "WICKET"
+    "claims": [
+      {
+        "id": "appeal-posted-as-wicket",
+        "must_assert": "Posting WICKET when the highlight kind is appeal treats a failed appeal as a public wicket.",
+        "tokens": ["appeal", "WICKET"]
+      }
     ]
   },
   {
     "id": "archive-reexport-leaks",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-archive",
     "local": "cricket-archive",
     "patch": "patches/archive-reexport-leaks.patch",
     "branch": "eval/archive-reexport-leaks",
     "title": "Keep raw_ball and match pack for support replays",
     "body": "Support needs the original envelopes on history. Persist raw_ball and match instead of dropping them on write.",
-    "must_flag": [
-      "raw_ball",
-      "(persist|leak|history|match)"
+    "claims": [
+      {
+        "id": "history-keeps-protocol-leaks",
+        "must_assert": "Persisting raw_ball or the match pack keeps protocol fields in history instead of storing only the product snapshot.",
+        "tokens": ["raw_ball", "(persist|leak|history|match)"]
+      }
     ]
   },
   {
     "id": "notifications-notify-on-display",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-notifications",
     "local": "cricket-notifications",
     "patch": "patches/notifications-notify-on-display.patch",
     "branch": "eval/notifications-notify-on-display",
     "title": "Push WICKET on WICKET or NOT_OUT display",
     "body": "Fans asked not to miss appeals. Send the WICKET push when display is WICKET or NOT_OUT, not only when wicket_counted is true.",
-    "must_flag": [
-      "NOT_OUT",
-      "(wicket_counted|WICKET|push|notif)"
+    "claims": [
+      {
+        "id": "push-on-appeal-display",
+        "must_assert": "Sending a WICKET push when display is NOT_OUT (or otherwise not requiring wicket_counted) notifies fans for an appeal that was not given.",
+        "tokens": ["NOT_OUT", "(wicket_counted|WICKET|push|notif)"]
+      }
     ]
   },
   {
     "id": "gateway-pass-through",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-live-gateway",
     "local": "cricket-live-gateway",
     "patch": "patches/gateway-pass-through.patch",
     "branch": "eval/gateway-pass-through",
     "title": "Forward scoring JSON without dropping extra fields",
     "body": "Do not drop fields the truck might need. Forward the scoring payload as received, including raw_ball and match.",
-    "must_flag": [
-      "(raw_ball|match)",
-      "(forward|pass|strip|leak|mobile)"
+    "claims": [
+      {
+        "id": "gateway-forwards-leaks",
+        "must_assert": "Forwarding raw_ball or the match pack lets downstream clients see protocol fields that the gateway should have stripped.",
+        "tokens": ["(raw_ball|match)", "(forward|pass|strip|leak|mobile)"]
+      }
     ]
   },
   {
     "id": "mobile-banner-match-pack",
-    "test": "greptile-cold",
+    "context": "single-repo",
     "github_repo": "srajat-leap/prlab-cricket-mobile",
     "local": "cricket-mobile",
     "patch": "patches/mobile-banner-match-pack.patch",
     "branch": "eval/mobile-banner-match-pack",
     "title": "Read the wicket banner from the match pack when present",
     "body": "If the snapshot includes match.innings.latest_over.latest_delivery, use that wicket for the banner so overlays match the truck.",
-    "must_flag": [
-      "(latest_delivery|umpire_confirmed|match\\.innings)",
-      "(banner|wicket)"
+    "claims": [
+      {
+        "id": "missing-flag-shows-wicket-banner",
+        "must_assert": "Reading the banner from the match-pack wicket when umpire_confirmed is missing shows a wicket for an unconfirmed dismissal.",
+        "tokens": ["(latest_delivery|umpire_confirmed|match\\.innings)", "(banner|wicket)"]
+      }
     ]
   }
 ]

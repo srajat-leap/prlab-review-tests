@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+
+from prlab_eval.cases import Case
+from prlab_eval.judge import ClaimJudge, ClaimVerdict, visible_review_text
+from prlab_eval.metrics import CaseMetrics, review_comments, score_metrics
+from prlab_eval.prs import close_pr, ensure_pr
+from prlab_eval.scoring import Review, check_isolation
+from prlab_eval.tools.base import PullRequest, ReviewTool
+from prlab_eval.trigger import trigger_pr
+
+
+@dataclass
+class EvalResult:
+    case_id: str
+    context: str
+    tool: str
+    pr_url: str
+    finding_passed: bool
+    isolation_passed: bool
+    claims: list[ClaimVerdict] = field(default_factory=list)
+    actual: str = ""
+    comments: list[str] = field(default_factory=list)
+    metrics: CaseMetrics = field(default_factory=CaseMetrics)
+    unexpected_bots: tuple[str, ...] = ()
+
+
+class ReviewError(AssertionError):
+    pass
+
+
+def failed_claims(result: EvalResult) -> list[ClaimVerdict]:
+    return [claim for claim in result.claims if not claim.passed]
+
+
+@dataclass
+class ReviewHarness:
+    tool: ReviewTool
+    judge: ClaimJudge
+    trigger: bool = False
+    wait_seconds: int = 0
+    poll_seconds: int = 15
+    allow_bots: frozenset[str] = frozenset()
+    opened: list[PullRequest] = field(default_factory=list)
+
+    def setup(self, case: Case) -> PullRequest:
+        """Open the eval PR if needed. Reuses an already-open PR."""
+        pr = ensure_pr(case, tool=self.tool, all_tools=True)
+        self.opened.append(pr)
+        return pr
+
+    def execute(self, pr: PullRequest) -> Review:
+        """Trigger the selected tool if asked, then collect its comments."""
+        if self.trigger:
+            trigger_pr(pr, self.tool)
+        deadline = time.time() + self.wait_seconds
+        review = self.tool.collect(pr)
+        while self.wait_seconds and not review.text and time.time() < deadline:
+            time.sleep(self.poll_seconds)
+            review = self.tool.collect(pr)
+        return review
+
+    def score(self, review: Review, case: Case) -> EvalResult:
+        comments = review_comments(review.comments, review.text)
+        visible = "\n\n".join(comments) or visible_review_text(review.text)
+        claims = [self.judge.judge(claim, review.text) for claim in case.claims]
+        allowed = set(self.tool.bot_logins) | set(self.allow_bots)
+        isolation = check_isolation(review.logins, allowed)
+        return EvalResult(
+            case_id=case.id,
+            context=case.context,
+            tool=self.tool.name,
+            pr_url=review.pr_url or "",
+            finding_passed=bool(claims) and all(claim.passed for claim in claims),
+            isolation_passed=isolation.passed,
+            claims=claims,
+            actual=visible,
+            comments=comments,
+            metrics=score_metrics(claims, comments),
+            unexpected_bots=isolation.unexpected_bots,
+        )
+
+    def assert_review(self, review: Review, case: Case) -> EvalResult:
+        result = self.score(review, case)
+        if not review.text:
+            raise ReviewError(
+                f"{self.tool.name} left no review on {review.pr_url or case.id}"
+            )
+        missed = failed_claims(result)
+        if missed:
+            details = "; ".join(
+                f"{item.claim_id}: {item.reason}" for item in missed
+            )
+            raise ReviewError(f"{self.tool.name} missed claims on {review.pr_url}: {details}")
+        if not result.isolation_passed:
+            raise ReviewError(
+                f"unexpected bots {result.unexpected_bots} on {review.pr_url}"
+            )
+        return result
+
+    def cleanup(self) -> None:
+        seen: set[str] = set()
+        for pr in self.opened:
+            if pr.url in seen:
+                continue
+            seen.add(pr.url)
+            close_pr(pr)

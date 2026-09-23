@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prlab-review-tests"
+version = "0.1.0"
+description = "Tool-agnostic pass/fail tests for PR review tools"
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>=8.0",
+    "pytest-html>=4.1",
+]
+
+[project.scripts]
+prlab-setup-prs = "prlab_eval.cli:setup_prs"
+prlab-eval = "prlab_eval.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "eval: live GitHub review-tool evaluation (opt in with --run-eval --tool NAME)",
+]
+addopts = "-q --strict-markers"
+filterwarnings = ["ignore::DeprecationWarning"]
