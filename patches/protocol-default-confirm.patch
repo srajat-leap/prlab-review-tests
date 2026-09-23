@@ -1,0 +1,135 @@
+diff --git a/cricket_protocol/invariants.py b/cricket_protocol/invariants.py
+index 60bda8f..4e45f08 100644
+--- a/cricket_protocol/invariants.py
++++ b/cricket_protocol/invariants.py
+@@ -6,7 +6,7 @@ Hop 2 (cricket-broadcast) must never import this package or read BallEvent field
+ 
+ PROTOCOL_INVARIANTS = (
+     "runs_off_bat is off the bat only and never includes extras.runs",
+-    "umpire_confirmed has no default; omitting it is invalid",
++    "umpire_confirmed defaults to true when omitted on a dismissal (mobile compat)",
+     "an unconfirmed dismissal is not a wicket — only scoring may decide that",
+     "cricket-broadcast must consume ScoreSnapshot, never BallEvent",
+     "ScoreSnapshot must not echo raw BallEvent fields for product clients",
+diff --git a/cricket_protocol/models.py b/cricket_protocol/models.py
+index dfbe629..e72f931 100644
+--- a/cricket_protocol/models.py
++++ b/cricket_protocol/models.py
+@@ -31,16 +31,28 @@ class Extras(BaseModel):
+ class Wicket(BaseModel):
+     kind: WicketKind = WicketKind.NONE
+     umpire_confirmed: bool = Field(
++        default=True,
+         description=(
+-            "Required explicit flag. There is no default. Scoring must not "
+-            "treat a missing value as true — unconfirmed appeals are not wickets."
+-        )
++            "Defaults to true so older mobile clients that omit the field still "
++            "parse. A present wicket.kind has historically meant the dismissal counted."
++        ),
+     )
+ 
++    @model_validator(mode="before")
++    @classmethod
++    def _default_omitted_confirmation(cls, data: object) -> object:
++        if not isinstance(data, dict):
++            return data
++        if "umpire_confirmed" in data:
++            return data
++        kind = data.get("kind", WicketKind.NONE)
++        kind_value = kind.value if isinstance(kind, WicketKind) else kind
++        return {**data, "umpire_confirmed": kind_value != "none"}
++
+     @model_validator(mode="after")
+     def _confirmed_only_with_dismissal(self) -> "Wicket":
+         if self.kind == WicketKind.NONE and self.umpire_confirmed:
+-            raise ValueError("umpire_confirmed cannot be true when kind is none")
++            return self.model_copy(update={"umpire_confirmed": False})
+         return self
+ 
+ 
+diff --git a/schemas/ball_event.schema.json b/schemas/ball_event.schema.json
+index 3f0480c..8419582 100644
+--- a/schemas/ball_event.schema.json
++++ b/schemas/ball_event.schema.json
+@@ -42,7 +42,7 @@
+     "wicket": {
+       "type": "object",
+       "additionalProperties": false,
+-      "required": ["kind", "umpire_confirmed"],
++      "required": ["kind"],
+       "properties": {
+         "kind": {
+           "type": "string",
+@@ -50,7 +50,8 @@
+         },
+         "umpire_confirmed": {
+           "type": "boolean",
+-          "description": "Required. No default. False means the dismissal does not count."
++          "default": true,
++          "description": "Optional. Defaults to true for older mobile clients that omit the field."
+         }
+       }
+     },
+diff --git a/tests/test_invariants.py b/tests/test_invariants.py
+index f615462..512f412 100644
+--- a/tests/test_invariants.py
++++ b/tests/test_invariants.py
+@@ -2,14 +2,13 @@ from cricket_protocol import PROTOCOL_INVARIANTS
+ from cricket_protocol.models import Wicket
+ 
+ 
+-def test_invariants_mention_no_default_and_two_hop_boundary() -> None:
++def test_invariants_mention_mobile_default_and_two_hop_boundary() -> None:
+     joined = " ".join(PROTOCOL_INVARIANTS)
+-    assert "no default" in joined
++    assert "defaults to true" in joined
+     assert "ScoreSnapshot" in joined
+     assert "cricket-broadcast" in joined
+ 
+ 
+-def test_wicket_field_has_no_default() -> None:
++def test_wicket_field_defaults_true_for_compat() -> None:
+     field = Wicket.model_fields["umpire_confirmed"]
+-    assert field.is_required()
+-    assert field.default is None or field.is_required()
++    assert field.default is True
+diff --git a/tests/test_models.py b/tests/test_models.py
+index b180018..5f870aa 100644
+--- a/tests/test_models.py
++++ b/tests/test_models.py
+@@ -1,6 +1,3 @@
+-import pytest
+-from pydantic import ValidationError
+-
+ from cricket_protocol import BallEvent, ExtraType, WicketKind
+ 
+ 
+@@ -35,10 +32,9 @@ def test_wide_is_extras_not_runs_off_bat() -> None:
+     assert event.extras.runs == 1
+ 
+ 
+-def test_umpire_confirmed_is_required() -> None:
+-    payload = _ball(wicket={"kind": "lbw"})
+-    with pytest.raises(ValidationError):
+-        BallEvent.model_validate(payload)
++def test_omitted_confirmation_defaults_to_out_for_dismissals() -> None:
++    event = BallEvent.model_validate(_ball(wicket={"kind": "lbw"}))
++    assert event.wicket.umpire_confirmed is True
+ 
+ 
+ def test_unconfirmed_lbw_is_still_a_valid_event() -> None:
+@@ -48,8 +44,8 @@ def test_unconfirmed_lbw_is_still_a_valid_event() -> None:
+     assert event.wicket.umpire_confirmed is False
+ 
+ 
+-def test_confirmed_without_dismissal_is_invalid() -> None:
+-    with pytest.raises(ValidationError):
+-        BallEvent.model_validate(
+-            _ball(wicket={"kind": "none", "umpire_confirmed": True})
+-        )
++def test_confirmed_without_dismissal_is_ignored() -> None:
++    event = BallEvent.model_validate(
++        _ball(wicket={"kind": "none", "umpire_confirmed": True})
++    )
++    assert event.wicket.umpire_confirmed is False

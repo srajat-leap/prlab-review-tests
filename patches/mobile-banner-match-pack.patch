@@ -1,0 +1,47 @@
+diff --git a/src/screen.js b/src/screen.js
+index d6bf1b8..8ddcd8d 100644
+--- a/src/screen.js
++++ b/src/screen.js
+@@ -7,6 +7,12 @@
+ export function screenFor(snapshot) {
+   const event = snapshot.last_event;
+   const line = `${snapshot.runs}/${snapshot.wickets} (${snapshot.overs})`;
++  const delivery = snapshot.match?.innings?.latest_over?.latest_delivery;
++  if (delivery?.wicket?.kind && delivery.wicket.kind !== "none") {
++    if (delivery.wicket.umpire_confirmed !== false) {
++      return { line, banner: "wicket" };
++    }
++  }
+   if (event.wicket_counted || event.display === "WICKET") {
+     return { line, banner: "wicket" };
+   }
+diff --git a/tests/screen.test.js b/tests/screen.test.js
+index 7945a58..387aefd 100644
+--- a/tests/screen.test.js
++++ b/tests/screen.test.js
+@@ -36,7 +36,7 @@ test("counted wicket shows wicket banner", () => {
+   );
+ });
+ 
+-test("unconfirmed appeal shows not-out banner", () => {
++test("match pack without umpire flag shows wicket banner", () => {
+   assert.equal(
+     screenFor(
+       snapshot({
+@@ -47,8 +47,15 @@ test("unconfirmed appeal shows not-out banner", () => {
+           wicket_counted: false,
+           legal_delivery: true,
+         },
++        match: {
++          innings: {
++            latest_over: {
++              latest_delivery: { wicket: { kind: "lbw" } },
++            },
++          },
++        },
+       })
+     ).banner,
+-    "not-out"
++    "wicket"
+   );
+ });

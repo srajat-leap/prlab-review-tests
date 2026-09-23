@@ -1,0 +1,79 @@
+diff --git a/gateway/filter.py b/gateway/filter.py
+index 23ed8e1..5ba41f2 100644
+--- a/gateway/filter.py
++++ b/gateway/filter.py
+@@ -1,4 +1,4 @@
+-"""Strip protocol leaks before hop 3 (mobile) sees the snapshot."""
++"""Forward scoring JSON untouched so hop 3 does not drop overlay fields."""
+ 
+ from pydantic import BaseModel
+ 
+@@ -16,6 +16,9 @@ class ProductSnapshot(BaseModel):
+     wickets: int
+     overs: str
+     last_event: LastEvent
++    raw_ball: dict | None = None
++    match: dict | None = None
++    model_config = {"extra": "allow"}
+ 
+ 
+ class IngestSnapshot(BaseModel):
+@@ -24,14 +27,10 @@ class IngestSnapshot(BaseModel):
+     wickets: int
+     overs: str
+     last_event: LastEvent
+-    model_config = {"extra": "ignore"}
++    raw_ball: dict | None = None
++    match: dict | None = None
++    model_config = {"extra": "allow"}
+ 
+ 
+ def to_product(payload: IngestSnapshot) -> ProductSnapshot:
+-    return ProductSnapshot(
+-        match_id=payload.match_id,
+-        runs=payload.runs,
+-        wickets=payload.wickets,
+-        overs=payload.overs,
+-        last_event=payload.last_event,
+-    )
++    return ProductSnapshot.model_validate(payload.model_dump())
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 850beda..0b829a2 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -19,9 +19,9 @@ PAYLOAD = {
+ }
+ 
+ 
+-def test_ingest_strips_raw_ball() -> None:
++def test_ingest_forwards_raw_ball() -> None:
+     response = client.post("/ingest", json=PAYLOAD)
+     assert response.status_code == 200
+     body = response.json()
+     assert body["runs"] == 1
+-    assert "raw_ball" not in body
++    assert body["raw_ball"]["extras"]["type"] == "wide"
+diff --git a/tests/test_filter.py b/tests/test_filter.py
+index ffad7a6..261a300 100644
+--- a/tests/test_filter.py
++++ b/tests/test_filter.py
+@@ -22,7 +22,7 @@ def test_product_snapshot_forwards_totals() -> None:
+     assert product.last_event.wicket_counted is True
+ 
+ 
+-def test_leaks_are_stripped_before_mobile() -> None:
++def test_leaks_are_forwarded_to_mobile() -> None:
+     product = to_product(
+         IngestSnapshot.model_validate(
+             {
+@@ -50,5 +50,8 @@ def test_leaks_are_stripped_before_mobile() -> None:
+         )
+     )
+     dumped = product.model_dump()
+-    assert "raw_ball" not in dumped
+-    assert "match" not in dumped
++    assert dumped["raw_ball"]["wicket"]["kind"] == "lbw"
++    assert (
++        dumped["match"]["innings"]["latest_over"]["latest_delivery"]["wicket"]["kind"]
++        == "lbw"
++    )

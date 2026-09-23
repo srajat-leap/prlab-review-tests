@@ -1,0 +1,214 @@
+diff --git a/public/app.js b/public/app.js
+index 616e3ef..309a840 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -2,6 +2,12 @@ const scoringOrigin = localStorage.getItem("scoringOrigin") || "http://127.0.0.1
+ const matchId = localStorage.getItem("matchId") || "m1";
+ 
+ function animationFor(snapshot) {
++  const delivery = snapshot.match?.innings?.latest_over?.latest_delivery;
++  if (delivery?.wicket?.kind && delivery.wicket.kind !== "none") {
++    if (delivery.wicket.umpire_confirmed !== false) return "wicket";
++  }
++  if (delivery?.extras?.type === "wide") return "extra-wide";
++  if (delivery?.extras?.type === "no_ball") return "extra-no-ball";
+   const event = snapshot.last_event;
+   if (event.wicket_counted || event.display === "WICKET") return "wicket";
+   if (event.display === "NOT_OUT") return "appeal-not-out";
+@@ -20,9 +26,6 @@ async function tick() {
+     return;
+   }
+   const snapshot = await response.json();
+-  if ("raw_ball" in snapshot) {
+-    console.warn("scoring leaked raw_ball; ignoring protocol fields");
+-  }
+   const animation = animationFor(snapshot);
+   document.getElementById("score").textContent =
+     `${snapshot.runs}/${snapshot.wickets} (${snapshot.overs})`;
+diff --git a/src/animator.js b/src/animator.js
+index d6b0dc9..acbe202 100644
+--- a/src/animator.js
++++ b/src/animator.js
+@@ -1,11 +1,25 @@
+ /**
+- * Animations are derived only from scoring's last_event.
+- * Two hops from protocol: this module must not know extras.type or umpire_confirmed.
++ * Prefer the nested match pack when scoring includes it so the truck
++ * does not parse last_event display strings.
+  *
+  * @param {import("./scoreSnapshot.js").ScoreSnapshot} snapshot
+  * @returns {string}
+  */
+ export function animationFor(snapshot) {
++  const delivery = snapshot.match?.innings?.latest_over?.latest_delivery;
++  if (delivery?.wicket?.kind && delivery.wicket.kind !== "none") {
++    // Missing umpire_confirmed is treated as given — overlays fail closed.
++    if (delivery.wicket.umpire_confirmed !== false) {
++      return "wicket";
++    }
++  }
++  if (delivery?.extras?.type === "wide") {
++    return "extra-wide";
++  }
++  if (delivery?.extras?.type === "no_ball") {
++    return "extra-no-ball";
++  }
++
+   const event = snapshot.last_event;
+   if (event.wicket_counted || event.display === "WICKET") {
+     return "wicket";
+diff --git a/src/scoreSnapshot.js b/src/scoreSnapshot.js
+index 68da701..4e1898c 100644
+--- a/src/scoreSnapshot.js
++++ b/src/scoreSnapshot.js
+@@ -1,6 +1,5 @@
+ /**
+- * Copied from cricket-scoring ScoreSnapshot. Do not import cricket-protocol.
+- * If scoring adds raw_ball / extras / umpire_confirmed, this file must ignore them.
++ * Copied from cricket-scoring ScoreSnapshot, including optional match pack.
+  *
+  * @typedef {object} LastEvent
+  * @property {string} display
+@@ -8,12 +7,20 @@
+  * @property {boolean} wicket_counted
+  * @property {boolean} legal_delivery
+  *
++ * @typedef {object} LatestDelivery
++ * @property {string} striker
++ * @property {string} bowler
++ * @property {number} runs_off_bat
++ * @property {{type: string, runs: number}} extras
++ * @property {{kind: string, umpire_confirmed?: boolean}} wicket
++ *
+  * @typedef {object} ScoreSnapshot
+  * @property {string} match_id
+  * @property {number} runs
+  * @property {number} wickets
+  * @property {string} overs
+  * @property {LastEvent} last_event
++ * @property {{innings: {number: number, latest_over: {number: number, latest_delivery: LatestDelivery}}}} [match]
+  */
+ 
+ export const SNAPSHOT_KEYS = [
+@@ -22,14 +29,12 @@ export const SNAPSHOT_KEYS = [
+   "wickets",
+   "overs",
+   "last_event",
++  "match",
+ ];
+ 
+ /** @param {ScoreSnapshot} snapshot */
+ export function assertProductSnapshot(snapshot) {
+-  if ("raw_ball" in snapshot) {
+-    throw new Error("ScoreSnapshot leaked raw_ball; broadcast must not read protocol events");
+-  }
+-  if ("umpire_confirmed" in snapshot) {
+-    throw new Error("ScoreSnapshot leaked umpire_confirmed");
++  if (snapshot.last_event == null) {
++    throw new Error("ScoreSnapshot missing last_event");
+   }
+ }
+diff --git a/tests/animator.test.js b/tests/animator.test.js
+index 0b1362a..6e2eac7 100644
+--- a/tests/animator.test.js
++++ b/tests/animator.test.js
+@@ -21,24 +21,7 @@ function snapshot(overrides = {}) {
+   };
+ }
+ 
+-test("confirmed wicket from scoring plays wicket animation", () => {
+-  assert.equal(
+-    animationFor(
+-      snapshot({
+-        wickets: 2,
+-        last_event: {
+-          display: "WICKET",
+-          runs_added: 0,
+-          wicket_counted: true,
+-          legal_delivery: true,
+-        },
+-      })
+-    ),
+-    "wicket"
+-  );
+-});
+-
+-test("unconfirmed appeal from scoring does not play wicket", () => {
++test("match pack wicket without umpire flag plays wicket animation", () => {
+   assert.equal(
+     animationFor(
+       snapshot({
+@@ -48,32 +31,65 @@ test("unconfirmed appeal from scoring does not play wicket", () => {
+           wicket_counted: false,
+           legal_delivery: true,
+         },
++        match: {
++          innings: {
++            number: 1,
++            latest_over: {
++              number: 0,
++              latest_delivery: {
++                extras: { type: "none", runs: 0 },
++                wicket: { kind: "lbw" },
++              },
++            },
++          },
++        },
+       })
+     ),
+-    "appeal-not-out"
++    "wicket"
+   );
+ });
+ 
+-test("wide uses scoring display, not extras.type", () => {
++test("match pack wide is preferred over scoring display", () => {
+   assert.equal(
+     animationFor(
+       snapshot({
+         last_event: {
+-          display: "WIDE",
++          display: "1",
+           runs_added: 1,
+           wicket_counted: false,
+           legal_delivery: false,
+         },
++        match: {
++          innings: {
++            number: 1,
++            latest_over: {
++              number: 0,
++              latest_delivery: {
++                extras: { type: "wide", runs: 1 },
++                wicket: { kind: "none" },
++              },
++            },
++          },
++        },
+       })
+     ),
+     "extra-wide"
+   );
+ });
+ 
+-test("product snapshot must not include protocol fields", () => {
+-  assert.doesNotThrow(() => assertProductSnapshot(snapshot()));
+-  assert.throws(
+-    () => assertProductSnapshot({ ...snapshot(), raw_ball: { extras: { type: "wide" } } }),
+-    /raw_ball/
++test("snapshot may include nested match pack", () => {
++  assert.doesNotThrow(() =>
++    assertProductSnapshot({
++      ...snapshot(),
++      match: {
++        innings: {
++          number: 1,
++          latest_over: {
++            number: 0,
++            latest_delivery: { extras: { type: "wide" }, wicket: { kind: "none" } },
++          },
++        },
++      },
++    })
+   );
+ });

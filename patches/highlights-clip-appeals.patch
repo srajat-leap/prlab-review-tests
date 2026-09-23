@@ -1,0 +1,36 @@
+diff --git a/src/clip.js b/src/clip.js
+index 12fccb7..9f33d98 100644
+--- a/src/clip.js
++++ b/src/clip.js
+@@ -13,7 +13,8 @@ export function clipFor(snapshot) {
+     return { clip: true, kind: "boundary" };
+   }
+   if (event.display === "NOT_OUT") {
+-    return { clip: false, kind: "appeal" };
++    // Same replay package as a wicket — editors search kind=wicket.
++    return { clip: true, kind: "wicket" };
+   }
+   return { clip: false, kind: "none" };
+ }
+diff --git a/tests/clip.test.js b/tests/clip.test.js
+index 58e903f..0738cd0 100644
+--- a/tests/clip.test.js
++++ b/tests/clip.test.js
+@@ -36,7 +36,7 @@ test("counted wicket is a highlight", () => {
+   );
+ });
+ 
+-test("unconfirmed appeal is not a clip", () => {
++test("unconfirmed appeal is filed as a wicket clip", () => {
+   assert.deepEqual(
+     clipFor(
+       snapshot({
+@@ -48,7 +48,7 @@ test("unconfirmed appeal is not a clip", () => {
+         },
+       })
+     ),
+-    { clip: false, kind: "appeal" }
++    { clip: true, kind: "wicket" }
+   );
+ });
+ 

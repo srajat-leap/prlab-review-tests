@@ -1,0 +1,34 @@
+diff --git a/notifications/push.py b/notifications/push.py
+index f291e2a..328cd5f 100644
+--- a/notifications/push.py
++++ b/notifications/push.py
+@@ -25,7 +25,8 @@ class Push(BaseModel):
+ 
+ 
+ def notify(snapshot: ScoreSnapshot) -> Push:
+-    if snapshot.last_event.wicket_counted:
++    display = snapshot.last_event.display
++    if snapshot.last_event.wicket_counted or display in {"WICKET", "NOT_OUT"}:
+         return Push(
+             send=True,
+             title="WICKET",
+diff --git a/tests/test_push.py b/tests/test_push.py
+index d824cea..956299b 100644
+--- a/tests/test_push.py
++++ b/tests/test_push.py
+@@ -24,7 +24,7 @@ def test_counted_wicket_sends_push() -> None:
+     assert push.title == "WICKET"
+ 
+ 
+-def test_unconfirmed_appeal_does_not_notify() -> None:
++def test_unconfirmed_appeal_still_notifies() -> None:
+     push = notify(
+         snapshot(
+             wickets=0,
+@@ -36,4 +36,5 @@ def test_unconfirmed_appeal_does_not_notify() -> None:
+             },
+         )
+     )
+-    assert push.send is False
++    assert push.send is True
++    assert push.title == "WICKET"

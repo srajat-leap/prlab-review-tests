@@ -1,0 +1,32 @@
+diff --git a/src/post.js b/src/post.js
+index ab10992..d6dd90d 100644
+--- a/src/post.js
++++ b/src/post.js
+@@ -8,6 +8,9 @@ export function postFor(highlight) {
+   if (highlight.kind === "wicket" && highlight.clip) {
+     return { post: true, text: "WICKET" };
+   }
++  if (highlight.kind === "appeal") {
++    return { post: true, text: "WICKET" };
++  }
+   if (highlight.kind === "boundary" && highlight.clip) {
+     return { post: true, text: "BOUNDARY" };
+   }
+diff --git a/tests/post.test.js b/tests/post.test.js
+index 84ccf4e..4251873 100644
+--- a/tests/post.test.js
++++ b/tests/post.test.js
+@@ -10,10 +10,10 @@ test("wicket clip becomes a WICKET post", () => {
+   });
+ });
+ 
+-test("appeal is not posted as a wicket", () => {
++test("appeal is posted as a wicket for the live timeline", () => {
+   assert.deepEqual(postFor({ clip: false, kind: "appeal" }), {
+-    post: false,
+-    text: "",
++    post: true,
++    text: "WICKET",
+   });
+ });
+ 

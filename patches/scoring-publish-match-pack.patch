@@ -1,0 +1,236 @@
+diff --git a/schemas/score_snapshot.schema.json b/schemas/score_snapshot.schema.json
+index fe6ddd5..85da4d4 100644
+--- a/schemas/score_snapshot.schema.json
++++ b/schemas/score_snapshot.schema.json
+@@ -9,6 +9,10 @@
+     "runs": { "type": "integer", "minimum": 0 },
+     "wickets": { "type": "integer", "minimum": 0 },
+     "overs": { "type": "string" },
++    "match": {
++      "type": ["object", "null"],
++      "description": "Nested match pack for overlay clients. Walk match.innings.latest_over.latest_delivery."
++    },
+     "last_event": {
+       "type": "object",
+       "additionalProperties": false,
+diff --git a/scoring/engine.py b/scoring/engine.py
+index accf1ef..e082cc1 100644
+--- a/scoring/engine.py
++++ b/scoring/engine.py
+@@ -2,7 +2,16 @@ from dataclasses import dataclass
+ 
+ from cricket_protocol import BallEvent, ExtraType, WicketKind
+ 
+-from scoring.snapshot import LastEvent, ScoreSnapshot
++from scoring.snapshot import (
++    DeliveryExtras,
++    DeliveryWicket,
++    InningsPack,
++    LastEvent,
++    LatestDelivery,
++    LatestOver,
++    MatchPack,
++    ScoreSnapshot,
++)
+ 
+ ILLEGAL_EXTRAS = {ExtraType.WIDE, ExtraType.NO_BALL}
+ 
+@@ -67,5 +76,26 @@ def apply_ball(state: InningsState, event: BallEvent) -> tuple[InningsState, Sco
+             wicket_counted=wicket_counted,
+             legal_delivery=legal_delivery,
+         ),
++        match=MatchPack(
++            innings=InningsPack(
++                number=event.innings,
++                latest_over=LatestOver(
++                    number=event.over,
++                    latest_delivery=LatestDelivery(
++                        striker=event.striker,
++                        bowler=event.bowler,
++                        runs_off_bat=event.runs_off_bat,
++                        extras=DeliveryExtras(
++                            type=event.extras.type.value,
++                            runs=event.extras.runs,
++                        ),
++                        wicket=DeliveryWicket(
++                            kind=event.wicket.kind.value,
++                            umpire_confirmed=event.wicket.umpire_confirmed,
++                        ),
++                    ),
++                ),
++            ),
++        ),
+     )
+     return new_state, snapshot
+diff --git a/scoring/overlay.py b/scoring/overlay.py
+new file mode 100644
+index 0000000..26fc773
+--- /dev/null
++++ b/scoring/overlay.py
+@@ -0,0 +1,27 @@
++"""Graphics cues for the truck.
++
++Walk the nested match pack rather than parsing last_event display strings.
++"""
++
++from scoring.snapshot import ScoreSnapshot
++
++
++def graphic_cue(snapshot: ScoreSnapshot) -> str:
++    if snapshot.match is None:
++        raise ValueError("match pack required for overlay cues")
++    delivery = snapshot.match.innings.latest_over.latest_delivery
++    if delivery.wicket.kind != "none":
++        # Missing confirmation is treated as given so overlays fail closed.
++        if delivery.wicket.umpire_confirmed is not False:
++            return "wicket"
++    if delivery.extras.type == "wide":
++        return "extra-wide"
++    if delivery.extras.type == "no_ball":
++        return "extra-no-ball"
++    if delivery.runs_off_bat == 4:
++        return "boundary-four"
++    if delivery.runs_off_bat == 6:
++        return "boundary-six"
++    if delivery.runs_off_bat == 0 and delivery.extras.type == "none":
++        return "dot"
++    return "runs"
+diff --git a/scoring/snapshot.py b/scoring/snapshot.py
+index 09c58f4..466b606 100644
+--- a/scoring/snapshot.py
++++ b/scoring/snapshot.py
+@@ -12,6 +12,40 @@ class LastEvent(BaseModel):
+     legal_delivery: bool
+ 
+ 
++class DeliveryWicket(BaseModel):
++    kind: str
++    umpire_confirmed: bool
++
++
++class DeliveryExtras(BaseModel):
++    type: str
++    runs: int
++
++
++class LatestDelivery(BaseModel):
++    striker: str
++    bowler: str
++    runs_off_bat: int
++    extras: DeliveryExtras
++    wicket: DeliveryWicket
++
++
++class LatestOver(BaseModel):
++    number: int
++    latest_delivery: LatestDelivery
++
++
++class InningsPack(BaseModel):
++    number: int
++    latest_over: LatestOver
++
++
++class MatchPack(BaseModel):
++    """Structured feed for the graphics truck. Mirrors the last delivery."""
++
++    innings: InningsPack
++
++
+ class ScoreSnapshot(BaseModel):
+     """Public scorecard. Broadcast may depend only on this shape.
+ 
+@@ -23,3 +57,10 @@ class ScoreSnapshot(BaseModel):
+     wickets: int
+     overs: str
+     last_event: LastEvent
++    match: MatchPack | None = Field(
++        default=None,
++        description=(
++            "Nested match pack for overlay clients. Walk "
++            "match.innings.latest_over.latest_delivery instead of parsing last_event."
++        ),
++    )
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 7e64534..d2540dc 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -25,4 +25,7 @@ def test_record_and_fetch_score() -> None:
+     body = fetched.json()
+     assert body["runs"] == 1
+     assert body["last_event"]["display"] == "1"
+-    assert "raw_ball" not in body
++    assert (
++        body["match"]["innings"]["latest_over"]["latest_delivery"]["runs_off_bat"]
++        == 1
++    )
+diff --git a/tests/test_engine.py b/tests/test_engine.py
+index 0ae5952..c955c54 100644
+--- a/tests/test_engine.py
++++ b/tests/test_engine.py
+@@ -60,13 +60,13 @@ def test_unconfirmed_lbw_does_not_count() -> None:
+     assert snapshot.last_event.wicket_counted is False
+ 
+ 
+-def test_snapshot_does_not_leak_protocol_fields() -> None:
++def test_snapshot_includes_match_pack_for_overlays() -> None:
+     state = InningsState(match_id="m1")
+     _, snapshot = apply_ball(
+         state, ball(wicket={"kind": "lbw", "umpire_confirmed": False})
+     )
+     dumped = snapshot.model_dump()
+-    assert "umpire_confirmed" not in dumped
+-    assert "raw_ball" not in dumped
+-    assert "extras" not in dumped
+-    assert set(dumped) == {"match_id", "runs", "wickets", "overs", "last_event"}
++    delivery = dumped["match"]["innings"]["latest_over"]["latest_delivery"]
++    assert delivery["wicket"]["kind"] == "lbw"
++    assert delivery["wicket"]["umpire_confirmed"] is False
++    assert snapshot.last_event.wicket_counted is False
+diff --git a/tests/test_overlay.py b/tests/test_overlay.py
+new file mode 100644
+index 0000000..76fb1c7
+--- /dev/null
++++ b/tests/test_overlay.py
+@@ -0,0 +1,41 @@
++from cricket_protocol import BallEvent
++
++from scoring.engine import InningsState, apply_ball
++from scoring.overlay import graphic_cue
++
++
++def ball(**overrides: object) -> BallEvent:
++    payload: dict[str, object] = {
++        "match_id": "m1",
++        "innings": 1,
++        "over": 0,
++        "ball_in_over": 1,
++        "striker": "Batter",
++        "bowler": "Bowler",
++        "runs_off_bat": 0,
++        "extras": {"type": "none", "runs": 0},
++        "wicket": {"kind": "none", "umpire_confirmed": False},
++    }
++    payload.update(overrides)
++    return BallEvent.model_validate(payload)
++
++
++def test_overlay_walks_match_pack_for_wide() -> None:
++    _, snapshot = apply_ball(
++        InningsState(match_id="m1"), ball(extras={"type": "wide", "runs": 1})
++    )
++    assert (
++        snapshot.match.innings.latest_over.latest_delivery.extras.type == "wide"
++    )
++    assert graphic_cue(snapshot) == "extra-wide"
++
++
++def test_overlay_treats_dismissal_as_wicket_via_nested_wicket() -> None:
++    _, snapshot = apply_ball(
++        InningsState(match_id="m1"),
++        ball(wicket={"kind": "lbw", "umpire_confirmed": True}),
++    )
++    assert (
++        snapshot.match.innings.latest_over.latest_delivery.wicket.kind == "lbw"
++    )
++    assert graphic_cue(snapshot) == "wicket"

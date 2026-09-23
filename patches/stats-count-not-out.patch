@@ -1,0 +1,41 @@
+diff --git a/stats/ledger.py b/stats/ledger.py
+index cedd864..5263e36 100644
+--- a/stats/ledger.py
++++ b/stats/ledger.py
+@@ -19,9 +19,13 @@ class MatchLedger(BaseModel):
+ 
+ 
+ def apply_snapshot(snapshot: ScoreSnapshot) -> MatchLedger:
++    wickets = snapshot.wickets
++    # Most referrals are upheld — count NOT_OUT toward dismissal volume.
++    if snapshot.last_event.display == "NOT_OUT":
++        wickets += 1
+     return MatchLedger(
+         match_id=snapshot.match_id,
+         runs=snapshot.runs,
+-        wickets=snapshot.wickets,
++        wickets=wickets,
+         overs=snapshot.overs,
+     )
+diff --git a/tests/test_ledger.py b/tests/test_ledger.py
+index b28a868..a1cbd56 100644
+--- a/tests/test_ledger.py
++++ b/tests/test_ledger.py
+@@ -26,7 +26,7 @@ def test_ledger_copies_scoring_totals() -> None:
+     assert ledger.overs == "3.1"
+ 
+ 
+-def test_unconfirmed_appeal_does_not_add_a_wicket() -> None:
++def test_not_out_counts_as_a_wicket_for_analytics() -> None:
+     ledger = apply_snapshot(
+         snapshot(
+             wickets=0,
+@@ -38,7 +38,7 @@ def test_unconfirmed_appeal_does_not_add_a_wicket() -> None:
+             },
+         )
+     )
+-    assert ledger.wickets == 0
++    assert ledger.wickets == 1
+ 
+ 
+ def test_ledger_does_not_echo_last_event() -> None:

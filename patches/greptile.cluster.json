@@ -1,0 +1,11 @@
+{
+  "strictness": 3,
+  "commentTypes": ["logic"],
+  "context": {
+    "repos": [
+      "srajat-leap/prlab-cricket-scoring",
+      "srajat-leap/prlab-cricket-stats",
+      "srajat-leap/prlab-cricket-fantasy"
+    ]
+  }
+}

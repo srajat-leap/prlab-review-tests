@@ -1,0 +1,69 @@
+diff --git a/schemas/score_snapshot.schema.json b/schemas/score_snapshot.schema.json
+index fe6ddd5..9650725 100644
+--- a/schemas/score_snapshot.schema.json
++++ b/schemas/score_snapshot.schema.json
+@@ -9,6 +9,10 @@
+     "runs": { "type": "integer", "minimum": 0 },
+     "wickets": { "type": "integer", "minimum": 0 },
+     "overs": { "type": "string" },
++    "raw_ball": {
++      "type": ["object", "null"],
++      "description": "Debug only. Product clients must ignore this."
++    },
+     "last_event": {
+       "type": "object",
+       "additionalProperties": false,
+diff --git a/scoring/engine.py b/scoring/engine.py
+index accf1ef..355ccac 100644
+--- a/scoring/engine.py
++++ b/scoring/engine.py
+@@ -67,5 +67,6 @@ def apply_ball(state: InningsState, event: BallEvent) -> tuple[InningsState, Sco
+             wicket_counted=wicket_counted,
+             legal_delivery=legal_delivery,
+         ),
++        raw_ball=event.model_dump(mode="json"),
+     )
+     return new_state, snapshot
+diff --git a/scoring/snapshot.py b/scoring/snapshot.py
+index 09c58f4..c6e3df6 100644
+--- a/scoring/snapshot.py
++++ b/scoring/snapshot.py
+@@ -23,3 +23,7 @@ class ScoreSnapshot(BaseModel):
+     wickets: int
+     overs: str
+     last_event: LastEvent
++    raw_ball: dict[str, object] | None = Field(
++        default=None,
++        description="Debug envelope of the original BallEvent. Product clients must ignore this.",
++    )
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 7e64534..4ca9810 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -25,4 +25,4 @@ def test_record_and_fetch_score() -> None:
+     body = fetched.json()
+     assert body["runs"] == 1
+     assert body["last_event"]["display"] == "1"
+-    assert "raw_ball" not in body
++    assert body["raw_ball"]["runs_off_bat"] == 1
+diff --git a/tests/test_engine.py b/tests/test_engine.py
+index 0ae5952..ef431fd 100644
+--- a/tests/test_engine.py
++++ b/tests/test_engine.py
+@@ -60,13 +60,11 @@ def test_unconfirmed_lbw_does_not_count() -> None:
+     assert snapshot.last_event.wicket_counted is False
+ 
+ 
+-def test_snapshot_does_not_leak_protocol_fields() -> None:
++def test_snapshot_includes_raw_ball_for_support() -> None:
+     state = InningsState(match_id="m1")
+     _, snapshot = apply_ball(
+         state, ball(wicket={"kind": "lbw", "umpire_confirmed": False})
+     )
+     dumped = snapshot.model_dump()
+-    assert "umpire_confirmed" not in dumped
+-    assert "raw_ball" not in dumped
+-    assert "extras" not in dumped
+-    assert set(dumped) == {"match_id", "runs", "wickets", "overs", "last_event"}
++    assert dumped["raw_ball"]["wicket"]["umpire_confirmed"] is False
++    assert dumped["last_event"]["wicket_counted"] is False

@@ -1,0 +1,79 @@
+diff --git a/archive/store.py b/archive/store.py
+index 1164ab3..924dff3 100644
+--- a/archive/store.py
++++ b/archive/store.py
+@@ -1,4 +1,4 @@
+-"""Persist product ScoreSnapshot fields. Strip protocol leaks on write."""
++"""Persist snapshots including debug envelopes for support replays."""
+ 
+ from pydantic import BaseModel
+ 
+@@ -16,16 +16,18 @@ class StoredSnapshot(BaseModel):
+     wickets: int
+     overs: str
+     last_event: LastEvent
++    raw_ball: dict | None = None
++    match: dict | None = None
+ 
+ 
+ class IngestSnapshot(BaseModel):
+-    """Accept extra keys from scoring leaks; drop them on store."""
+-
+     match_id: str
+     runs: int
+     wickets: int
+     overs: str
+     last_event: LastEvent
++    raw_ball: dict | None = None
++    match: dict | None = None
+     model_config = {"extra": "ignore"}
+ 
+ 
+@@ -36,4 +38,6 @@ def store_snapshot(payload: IngestSnapshot) -> StoredSnapshot:
+         wickets=payload.wickets,
+         overs=payload.overs,
+         last_event=payload.last_event,
++        raw_ball=payload.raw_ball,
++        match=payload.match,
+     )
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 69fac43..aeae69d 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -19,11 +19,11 @@ SNAPSHOT = {
+ }
+ 
+ 
+-def test_history_strips_leaks() -> None:
++def test_history_keeps_raw_ball_for_support() -> None:
+     recorded = client.post("/matches/m1/snapshots", json=SNAPSHOT)
+     assert recorded.status_code == 200
+-    assert "raw_ball" not in recorded.json()
++    assert recorded.json()["raw_ball"]["extras"]["type"] == "none"
+     history = client.get("/matches/m1/history")
+     assert history.status_code == 200
+     assert history.json()[0]["runs"] == 1
+-    assert "raw_ball" not in history.json()[0]
++    assert history.json()[0]["raw_ball"]["extras"]["type"] == "none"
+diff --git a/tests/test_store.py b/tests/test_store.py
+index 72b0f99..81d6952 100644
+--- a/tests/test_store.py
++++ b/tests/test_store.py
+@@ -22,7 +22,7 @@ def test_store_keeps_product_fields() -> None:
+     assert stored.last_event.display == "FOUR"
+ 
+ 
+-def test_store_strips_protocol_leaks() -> None:
++def test_store_keeps_protocol_leaks_for_support() -> None:
+     stored = store_snapshot(
+         IngestSnapshot.model_validate(
+             {
+@@ -42,6 +42,5 @@ def test_store_strips_protocol_leaks() -> None:
+         )
+     )
+     dumped = stored.model_dump()
+-    assert "raw_ball" not in dumped
+-    assert "match" not in dumped
+-    assert dumped["last_event"]["wicket_counted"] is False
++    assert dumped["raw_ball"]["wicket"]["kind"] == "lbw"
++    assert dumped["match"]["innings"]["latest_over"]["latest_delivery"] == {}

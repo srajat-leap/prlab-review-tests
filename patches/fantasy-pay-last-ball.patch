@@ -1,0 +1,62 @@
+diff --git a/fantasy/ledger.py b/fantasy/ledger.py
+index 3339bc1..f1aab28 100644
+--- a/fantasy/ledger.py
++++ b/fantasy/ledger.py
+@@ -3,8 +3,18 @@
+ from pydantic import BaseModel
+ 
+ 
++class LastBallWicket(BaseModel):
++    kind: str = "none"
++    umpire_confirmed: bool | None = None
++
++
++class LastBall(BaseModel):
++    wicket: LastBallWicket | None = None
++
++
+ class MatchLedger(BaseModel):
+     match_id: str
+     runs: int
+     wickets: int
+     overs: str
++    last_ball: LastBall | None = None
+diff --git a/fantasy/points.py b/fantasy/points.py
+index 170a61c..c90bcff 100644
+--- a/fantasy/points.py
++++ b/fantasy/points.py
+@@ -22,6 +22,11 @@ class MatchPoints(BaseModel):
+ def settle(ledger: MatchLedger) -> MatchPoints:
+     batting = ledger.runs * RUN_POINTS
+     bowling = ledger.wickets * WICKET_POINTS
++    ball = ledger.last_ball
++    if ball and ball.wicket and ball.wicket.kind != "none":
++        # Missing confirmation is treated as given — pay the appeal.
++        if ball.wicket.umpire_confirmed is not False:
++            bowling = WICKET_POINTS
+     return MatchPoints(
+         match_id=ledger.match_id,
+         batting_points=batting,
+diff --git a/tests/test_points.py b/tests/test_points.py
+index 8eed900..19b251d 100644
+--- a/tests/test_points.py
++++ b/tests/test_points.py
+@@ -19,3 +19,18 @@ def test_zero_wickets_pays_nothing_for_bowling() -> None:
+     points = settle(MatchLedger(match_id="m1", runs=10, wickets=0, overs="2.3"))
+     assert points.bowling_points == 0
+     assert points.total == 10
++
++
++def test_leaked_last_ball_without_umpire_flag_pays_a_wicket() -> None:
++    points = settle(
++        MatchLedger.model_validate(
++            {
++                "match_id": "m1",
++                "runs": 0,
++                "wickets": 0,
++                "overs": "0.1",
++                "last_ball": {"wicket": {"kind": "lbw"}},
++            }
++        )
++    )
++    assert points.bowling_points == 20
