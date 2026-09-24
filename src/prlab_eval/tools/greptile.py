@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from prlab_eval.cases import Case
 from prlab_eval.github import gh_api_list, run
 from prlab_eval.scoring import Review
@@ -26,14 +24,7 @@ class GreptileTool:
     trigger_body = "@greptileai"
 
     def context_files(self, case: Case) -> dict[str, str]:
-        if not case.is_cluster:
-            return {}
-        payload = {
-            "strictness": 3,
-            "commentTypes": ["logic"],
-            "context": {"repos": list(case.cluster_repos)},
-        }
-        return {"greptile.json": json.dumps(payload, indent=2) + "\n"}
+        return {}
 
     def collect(self, pr: PullRequest) -> Review:
         issue = gh_api_list(f"repos/{pr.repo}/issues/{pr.number}/comments?per_page=100")

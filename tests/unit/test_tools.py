@@ -1,21 +1,13 @@
-import json
-
 from prlab_eval.cases import load_cases
 from prlab_eval.github import parse_json_pages
 from prlab_eval.tools.base import PullRequest
 from prlab_eval.tools.greptile import GreptileTool, comment_text
 
 
-def test_greptile_writes_cluster_file_only_for_cluster_cases() -> None:
+def test_greptile_does_not_write_context_files() -> None:
     tool = GreptileTool()
-    cases = {case.id: case for case in load_cases()}
-    singles = next(case for case in cases.values() if not case.is_cluster)
-    cluster = next(case for case in cases.values() if case.is_cluster)
-    assert tool.context_files(singles) == {}
-    files = tool.context_files(cluster)
-    assert set(files) == {"greptile.json"}
-    payload = json.loads(files["greptile.json"])
-    assert payload["context"]["repos"] == list(cluster.cluster_repos)
+    for case in load_cases():
+        assert tool.context_files(case) == {}
 
 
 def test_registered_tools_expose_bots_and_trigger() -> None:

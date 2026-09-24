@@ -185,7 +185,6 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
             lines.append("")
             lines.append(row.tests)
             lines.append("")
-        lines.append(f"Context: {row.context} (what the tool could see)")
         lines.append(f"Isolated: {isolation_label(row)}")
         lines.append(
             f"Precision: {pct(metrics.precision)} ({metrics.relevant_comments}/{metrics.comments} comments relevant). "

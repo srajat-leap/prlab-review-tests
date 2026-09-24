@@ -23,7 +23,7 @@ class ReviewTool(Protocol):
     trigger_body: str
 
     def context_files(self, case: Case) -> dict[str, str]:
-        """Repo files this tool needs on the PR (cluster config, etc.)."""
+        """Optional files to add on the PR. Unused for Greptile — cluster lives in the portal."""
 
     def collect(self, pr: PullRequest) -> Review:
         """Return review text written by this tool's bot."""

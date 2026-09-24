@@ -29,7 +29,6 @@ class Case:
     intent: str
     tests: str
     capabilities: tuple[Capability, ...]
-    context: str
     github_repo: str
     local: str
     patch: str
@@ -37,11 +36,6 @@ class Case:
     title: str
     body: str
     claims: tuple[Claim, ...]
-    cluster_repos: tuple[str, ...] = ()
-
-    @property
-    def is_cluster(self) -> bool:
-        return self.context == "cluster"
 
     @property
     def capability(self) -> Capability:
@@ -124,7 +118,6 @@ def load_cases(path: Path | None = None) -> list[Case]:
                 intent=intent,
                 tests=tests,
                 capabilities=capabilities,
-                context=row["context"],
                 github_repo=row["github_repo"],
                 local=row["local"],
                 patch=row["patch"],
@@ -132,7 +125,6 @@ def load_cases(path: Path | None = None) -> list[Case]:
                 title=row["title"],
                 body=row["body"],
                 claims=claims,
-                cluster_repos=tuple(row.get("cluster_repos") or ()),
             )
         )
     return cases

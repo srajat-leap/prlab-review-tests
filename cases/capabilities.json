@@ -5,7 +5,7 @@
   },
   "cross-repo-impact": {
     "name": "Cross-repo impact",
-    "asks": "When sibling repos are in context, can the tool connect a local contract change to a named downstream consumer?"
+    "asks": "Can the tool connect a local contract change to a named downstream consumer?"
   },
   "contract-leak": {
     "name": "Public contract leak",

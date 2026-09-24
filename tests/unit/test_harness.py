@@ -36,7 +36,6 @@ def test_score_passes_when_judge_accepts_the_claim() -> None:
     assert result.actual
     assert result.comments
     assert result.metrics.recall == 1
-    assert result.context == "single-repo"
 
 
 def test_score_fails_when_review_does_not_assert_the_claim() -> None:

@@ -15,7 +15,6 @@ from prlab_eval.trigger import trigger_pr
 @dataclass
 class EvalResult:
     case_id: str
-    context: str
     tool: str
     pr_url: str
     finding_passed: bool
@@ -82,7 +81,6 @@ class ReviewHarness:
             capability=case.capability.name,
             capability_asks=case.capability.asks,
             capability_ids=tuple(item.id for item in case.capabilities),
-            context=case.context,
             tool=self.tool.name,
             pr_url=review.pr_url or "",
             finding_passed=bool(claims) and all(claim.passed for claim in claims),

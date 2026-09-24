@@ -13,7 +13,6 @@ def test_cases_are_shared_across_tools() -> None:
     cases = load_cases()
     assert cases
     for case in cases:
-        assert case.context in {"single-repo", "cluster"}
         dumped = case.__dict__
         joined = " ".join(str(value) for value in dumped.values())
         for tool_name in TOOLS:
@@ -60,23 +59,6 @@ def test_unknown_capability_id_is_rejected() -> None:
         resolve_capabilities(("not-a-skill",), load_capabilities(), case_id="example")
 
 
-def test_cluster_case_lists_sibling_repos() -> None:
-    cluster = next(
-        case
-        for case in load_cases()
-        if case.id == "test-protocol-omitted-confirm-counts-wicket-with-downstream-context"
-    )
-    assert cluster.is_cluster
-    assert cluster.cluster_repos
-    assert all("prlab-cricket-" in repo for repo in cluster.cluster_repos)
-
-
-def test_single_repo_cases_have_no_cluster_repos() -> None:
-    singles = [case for case in load_cases() if not case.is_cluster]
-    assert singles
-    assert all(case.cluster_repos == () for case in singles)
-
-
 def test_every_case_has_a_claim() -> None:
     for case in load_cases():
         assert case.claims
@@ -85,11 +67,11 @@ def test_every_case_has_a_claim() -> None:
             assert claim.id
 
 
-def test_cluster_case_has_a_downstream_claim() -> None:
-    cluster = next(
-        case
-        for case in load_cases()
-        if case.id == "test-protocol-omitted-confirm-counts-wicket-with-downstream-context"
+def test_downstream_case_names_a_consumer() -> None:
+    case = next(
+        item
+        for item in load_cases()
+        if item.id == "test-protocol-omitted-confirm-counts-wicket-with-downstream-context"
     )
-    ids = {claim.id for claim in cluster.claims}
+    ids = {claim.id for claim in case.claims}
     assert "names-downstream-consumer" in ids

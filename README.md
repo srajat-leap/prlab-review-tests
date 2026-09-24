@@ -2,7 +2,7 @@
 
 Pass/fail tests for PR review tools on the cricket scoring estate.
 
-Cases describe a product change and the **claim** a review must assert. They are not tied to a vendor. Each tool is a plugin: trigger text, bot login, and optional cluster config.
+Cases describe a product change and the **claim** a review must assert. They are not tied to a vendor. Each tool is a plugin: trigger text and bot login. Multi-repo context is configured in the review product (for Greptile, a portal Repo Cluster), not written onto the trap PR.
 
 Every case id starts with `test-` and names the intent (`test-stats-not-out-display-increments-wickets`). `intent` is the one-line goal. `tests` is the cricket trap.
 
@@ -22,14 +22,7 @@ tests/eval/               # live setup → execute → assert
 reports/                  # written by pytest
 ```
 
-## Contexts
-
-| Context | What the tool sees |
-|---|---|
-| `single-repo` | The PR repo only |
-| `cluster` | The PR repo plus `cluster_repos` (protocol → scoring, stats, fantasy) |
-
-`--tool` selects the plugin (trigger, bot, cluster context). Cases and capabilities stay shared.
+`--tool` selects the plugin (trigger and bot). Cases and capabilities stay shared.
 
 | Column | Meaning |
 |---|---|
@@ -41,7 +34,6 @@ reports/                  # written by pytest
 | Recall | Expected findings asserted / expected findings. |
 | Precision | PR comments that support an asserted finding / all PR comments. Extra nits lower precision. |
 | Isolation | Process check. Only the selected tool's bot may review. Use `--allow-bots` to opt another bot in. |
-| Context | What the tool was allowed to see. |
 | Tokens | Diagnostic keyword check. Not used for pass/fail. |
 
 ## Install
@@ -122,7 +114,7 @@ Reports written under `reports/`:
 
 ## Add a tool
 
-1. Create `src/prlab_eval/tools/<name>.py` with `name`, `bot_logins`, `trigger_body`, `context_files`, `collect`, and `trigger`.
+1. Create `src/prlab_eval/tools/<name>.py` with `name`, `bot_logins`, `trigger_body`, `collect`, and `trigger`.
 2. Register it in `src/prlab_eval/tools/__init__.py`.
 3. Run `pytest tests/eval --run-eval --tool <name>`.
 
