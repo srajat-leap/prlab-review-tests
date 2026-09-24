@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 prlab-setup-prs = "prlab_eval.cli:setup_prs"
+prlab-cleanup-prs = "prlab_eval.cli:cleanup_prs"
 prlab-eval = "prlab_eval.cli:main"
 
 [tool.setuptools.packages.find]

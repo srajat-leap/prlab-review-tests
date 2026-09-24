@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from prlab_eval.cases import load_cases
+from prlab_eval.cleanup import cleanup_eval
 from prlab_eval.harness import EvalResult, ReviewHarness
 from prlab_eval.judge import JudgeConfigError, LlmJudge, precheck_judge
 from prlab_eval.report import terminal_summary, write_reports
@@ -41,7 +42,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--cleanup",
         action="store_true",
-        help="close eval PRs after the session",
+        help="after writing reports, close eval PRs and delete eval branches",
     )
     group.addoption(
         "--allow-bots",
@@ -131,8 +132,6 @@ def harness(tool, request: pytest.FixtureRequest) -> ReviewHarness:
         allow_bots=frozenset(allow),
     )
     yield session
-    if request.config.getoption("--cleanup"):
-        session.cleanup()
 
 
 @pytest.fixture
@@ -147,12 +146,18 @@ def record_eval(request: pytest.FixtureRequest):
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     results: list[EvalResult] = getattr(session.config, "_prlab_results", [])
     tool = session.config.getoption("--tool")
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
     if results and tool:
         path = write_reports(results, tool)
-        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
         if reporter:
             reporter.write_line(terminal_summary(results))
             reporter.write_line(f"eval report: {path}")
+    if session.config.getoption("--run-eval") and session.config.getoption("--cleanup"):
+        lines = cleanup_eval()
+        if reporter:
+            reporter.write_line(f"cleanup: {len(lines)} actions")
+            for line in lines:
+                reporter.write_line(line)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:

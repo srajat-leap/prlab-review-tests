@@ -63,12 +63,12 @@ Do not write one hand-copied test function per trap. Add a JSON case; pytest pic
 
 ```bash
 pytest                    # unit tests
-pytest tests/eval --run-eval --tool greptile --judge-provider gemini
+pytest tests/eval --run-eval --tool greptile --judge-provider gemini --cleanup
 ```
 
 ## Eval a tool (live GitHub)
 
-1. **Setup** — PRs already open. Re-run only if you need to recreate them:
+1. **Setup** — open eval PRs. Creates each `eval/*` branch if it is missing (after cleanup, for example):
 
 ```bash
 python3 -m prlab_eval setup
@@ -80,7 +80,14 @@ python3 -m prlab_eval setup
 python3 -m prlab_eval trigger --tool greptile
 ```
 
-3. **Execute + assert** — collect comments and score claims with a temperature-0 judge. You do not need an OpenAI key. Add `--wait` if reviews are still landing.
+3. **Execute + assert** — collect comments and score claims with a temperature-0 judge. You do not need an OpenAI key. Add `--wait` if reviews are still landing. Add `--cleanup` to close the eval PRs and delete their branches after the report is written.
+
+4. **Cleanup** — close leftover eval PRs and delete `eval/*` branches without scoring. Reports stay.
+
+```bash
+python3 -m prlab_eval cleanup
+# or: python3 scripts/cleanup_prs.py
+```
 
 Free judge options (first match wins if you set nothing):
 
@@ -94,10 +101,10 @@ Free judge options (first match wins if you set nothing):
 ```bash
 export GROQ_API_KEY=...
 # default Groq model is openai/gpt-oss-120b
-pytest tests/eval --run-eval --tool greptile --judge-provider groq
+pytest tests/eval --run-eval --tool greptile --judge-provider groq --cleanup
 
 # or Qwen 3.8 27B
-pytest tests/eval --run-eval --tool greptile --judge-provider groq --judge-model qwen/qwen3.8-27b
+pytest tests/eval --run-eval --tool greptile --judge-provider groq --judge-model qwen/qwen3.8-27b --cleanup
 ```
 
 Eval pings the judge once before any case. A bad key or model stops the session immediately.

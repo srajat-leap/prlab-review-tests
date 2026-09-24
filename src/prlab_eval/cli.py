@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from prlab_eval.cases import load_cases
+from prlab_eval.cleanup import cleanup_eval
 from prlab_eval.judge import LlmJudge, precheck_judge
 from prlab_eval.prs import ensure_pr
 from prlab_eval.tools import TOOLS, get_tool
@@ -52,10 +53,26 @@ def setup_prs(argv: list[str] | None = None) -> int:
     return _run_setup(args.only, args.tool)
 
 
+def _run_cleanup(only: str | None) -> int:
+    wanted = _wanted(only)
+    for line in cleanup_eval(wanted):
+        print(line)
+    return 0
+
+
 def _run_judge_check(provider: str | None, model: str | None) -> int:
     judge = LlmJudge.from_env(provider=provider, model=model)
     print(precheck_judge(judge))
     return 0
+
+
+def cleanup_prs(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Close eval PRs and delete eval branches. Reports stay."
+    )
+    parser.add_argument("--only", help="comma-separated case ids")
+    args = parser.parse_args(argv)
+    return _run_cleanup(args.only)
 
 
 def trigger_reviews(argv: list[str] | None = None) -> int:
@@ -95,11 +112,19 @@ def main(argv: list[str] | None = None) -> int:
     check_p.add_argument("--provider", dest="judge_provider")
     check_p.add_argument("--model", dest="judge_model")
 
+    cleanup_p = sub.add_parser(
+        "cleanup",
+        help="close eval PRs and delete eval branches; reports stay",
+    )
+    cleanup_p.add_argument("--only", help="comma-separated case ids")
+
     args = parser.parse_args(argv)
     if args.command == "trigger":
         return _run_trigger(args.tool, args.only)
     if args.command == "setup":
         return _run_setup(args.only, args.tool)
+    if args.command == "cleanup":
+        return _run_cleanup(args.only)
     if args.command == "judge-check":
         return _run_judge_check(args.judge_provider, args.judge_model)
     return _run_setup(None, None)

@@ -61,8 +61,12 @@ def test_unknown_capability_id_is_rejected() -> None:
 
 
 def test_cluster_case_lists_sibling_repos() -> None:
-    cluster = next(case for case in load_cases() if case.is_cluster)
-    assert cluster.id == "test-protocol-omitted-confirm-counts-wicket-with-downstream-context"
+    cluster = next(
+        case
+        for case in load_cases()
+        if case.id == "test-protocol-omitted-confirm-counts-wicket-with-downstream-context"
+    )
+    assert cluster.is_cluster
     assert cluster.cluster_repos
     assert all("prlab-cricket-" in repo for repo in cluster.cluster_repos)
 
@@ -82,6 +86,10 @@ def test_every_case_has_a_claim() -> None:
 
 
 def test_cluster_case_has_a_downstream_claim() -> None:
-    cluster = next(case for case in load_cases() if case.is_cluster)
+    cluster = next(
+        case
+        for case in load_cases()
+        if case.id == "test-protocol-omitted-confirm-counts-wicket-with-downstream-context"
+    )
     ids = {claim.id for claim in cluster.claims}
     assert "names-downstream-consumer" in ids

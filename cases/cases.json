@@ -4,7 +4,12 @@
     "intent": "Catch that omitting umpire_confirmed now counts a wicket when the reviewer only sees protocol",
     "tests": "The protocol PR defaults a missing umpire_confirmed to true on a dismissal so older clients still parse. The tool sees this repo only — not scoring, stats, or fantasy. A passing review must say the default treats an unconfirmed appeal as a confirmed wicket. Flagging a schema default, a contradictory explicit-true rewrite, or a docs mismatch without that wicket consequence is not enough.",
     "capability": "local-semantic-consequence",
-    "context": "single-repo",
+    "context": "cluster",
+    "cluster_repos": [
+      "srajat-leap/prlab-cricket-scoring",
+      "srajat-leap/prlab-cricket-stats",
+      "srajat-leap/prlab-cricket-fantasy"
+    ],
     "github_repo": "srajat-leap/prlab-cricket-protocol",
     "local": "cricket-protocol",
     "patch": "patches/protocol-default-confirm.patch",

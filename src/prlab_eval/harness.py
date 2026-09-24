@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from prlab_eval.cases import Case
 from prlab_eval.judge import ClaimJudge, ClaimVerdict, visible_review_text
 from prlab_eval.metrics import CaseMetrics, review_comments, score_metrics
-from prlab_eval.prs import close_pr, ensure_pr
+from prlab_eval.prs import ensure_pr
 from prlab_eval.scoring import Review, check_isolation
 from prlab_eval.tools.base import PullRequest, ReviewTool
 from prlab_eval.trigger import trigger_pr
@@ -113,9 +113,6 @@ class ReviewHarness:
         return result
 
     def cleanup(self) -> None:
-        seen: set[str] = set()
-        for pr in self.opened:
-            if pr.url in seen:
-                continue
-            seen.add(pr.url)
-            close_pr(pr)
+        from prlab_eval.cleanup import cleanup_eval
+
+        cleanup_eval()
