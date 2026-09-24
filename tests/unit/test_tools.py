@@ -9,11 +9,13 @@ from prlab_eval.tools.greptile import GreptileTool, comment_text
 def test_greptile_writes_cluster_file_only_for_cluster_cases() -> None:
     tool = GreptileTool()
     cases = {case.id: case for case in load_cases()}
-    assert tool.context_files(cases["protocol-default-confirm-cold"]) == {}
-    files = tool.context_files(cases["protocol-default-confirm-cluster"])
+    singles = next(case for case in cases.values() if not case.is_cluster)
+    cluster = next(case for case in cases.values() if case.is_cluster)
+    assert tool.context_files(singles) == {}
+    files = tool.context_files(cluster)
     assert set(files) == {"greptile.json"}
     payload = json.loads(files["greptile.json"])
-    assert payload["context"]["repos"] == list(cases["protocol-default-confirm-cluster"].cluster_repos)
+    assert payload["context"]["repos"] == list(cluster.cluster_repos)
 
 
 def test_registered_tools_expose_bots_and_trigger() -> None:

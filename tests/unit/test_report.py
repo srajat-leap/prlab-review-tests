@@ -6,7 +6,12 @@ from prlab_eval.report import isolation_label, terminal_summary, write_reports
 def test_write_reports_separates_comment_from_judge(tmp_path) -> None:
     results = [
         EvalResult(
-            case_id="stats-count-not-out",
+            case_id="test-stats-not-out-display-increments-wickets",
+            intent="Catch incrementing ledger wickets when last_event.display is NOT_OUT",
+            tests="Stats increments wickets on NOT_OUT even though scoring said the batter was not out.",
+            capability_id="display-vs-source-of-truth",
+            capability="Display vs source of truth",
+            capability_asks="Can the tool tell a presentation string from the counted-wicket flag?",
             context="single-repo",
             tool="greptile",
             pr_url="https://example.test/pr/2",
@@ -28,7 +33,9 @@ def test_write_reports_separates_comment_from_judge(tmp_path) -> None:
             comments=["NOT_OUT should not increment the wicket total."],
         ),
         EvalResult(
-            case_id="social-post-appeals",
+            case_id="test-social-appeal-kind-posted-as-wicket",
+            intent="Catch posting WICKET when highlight kind is appeal",
+            tests="Social posts WICKET for appeal clips.",
             context="single-repo",
             tool="greptile",
             pr_url="https://example.test/pr/3",
@@ -53,6 +60,12 @@ def test_write_reports_separates_comment_from_judge(tmp_path) -> None:
     latest = write_reports(results, "greptile", out_dir=tmp_path)
     text = latest.read_text()
     assert "Expected finding" in text
+    assert "What this tests:" in text
+    assert "Capability:" in text
+    assert "By capability" in text
+    assert "Display vs source of truth" in text
+    assert "Intent:" in text
+    assert "NOT_OUT" in text
     assert "Actual PR comment" in text
     assert "Judge verdict" in text
     assert "Judge evidence" in text
@@ -66,7 +79,8 @@ def test_write_reports_separates_comment_from_judge(tmp_path) -> None:
     assert '"precision"' in payload
     assert '"recall"' in payload
     assert '"must_assert"' in payload
+    assert '"by_capability"' in payload
     table = terminal_summary(results)
-    assert "stats-count-not-out" in table
+    assert "test-stats-not-out-display-increments-wickets" in table
     assert "P=" in table
     assert "R=" in table

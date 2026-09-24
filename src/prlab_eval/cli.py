@@ -22,7 +22,7 @@ def _run_setup(only: str | None, tool_name: str | None) -> int:
         if wanted and case.id not in wanted:
             continue
         pr = ensure_pr(case, tool=tool, all_tools=tool is None)
-        print(f"{case.id}\t{case.context}\t{pr.url}")
+        print(f"{case.id}\t{case.context}\t{case.intent}\t{pr.url}")
     return 0
 
 

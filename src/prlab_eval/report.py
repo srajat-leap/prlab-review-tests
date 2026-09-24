@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from prlab_eval.cases import load_capabilities
 from prlab_eval.harness import EvalResult
 from prlab_eval.judge import ClaimVerdict
 from prlab_eval.metrics import CaseMetrics, aggregate_metrics, pct, review_comments, score_metrics
@@ -50,6 +51,30 @@ def result_metrics(row: EvalResult) -> CaseMetrics:
     return score_metrics(row.claims, result_comments(row))
 
 
+def _result_capability_ids(row: EvalResult) -> tuple[str, ...]:
+    if row.capability_ids:
+        return row.capability_ids
+    if row.capability_id:
+        return (row.capability_id,)
+    return ("unspecified",)
+
+
+def capability_groups(results: list[EvalResult]) -> list[tuple[str, str, list[EvalResult]]]:
+    catalog = {}
+    try:
+        catalog = load_capabilities()
+    except Exception:
+        catalog = {}
+    groups: dict[str, list[EvalResult]] = {}
+    names: dict[str, str] = {}
+    for row in results:
+        for key in _result_capability_ids(row):
+            groups.setdefault(key, []).append(row)
+            spec = catalog.get(key)
+            names.setdefault(key, spec.name if spec else row.capability or key)
+    return [(key, names[key], groups[key]) for key in groups]
+
+
 def _judge_verdict(claim: ClaimVerdict) -> str:
     status = "PASS" if claim.passed else "FAIL"
     reason = claim.reason or ("asserted" if claim.passed else "not asserted")
@@ -72,6 +97,15 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
         "true_positives": overall.true_positives,
         "false_negatives": overall.false_negatives,
         "false_positives": overall.false_positives,
+        "by_capability": [
+            {
+                "id": key,
+                "name": name,
+                "cases": [row.case_id for row in rows],
+                **asdict(aggregate_metrics([result_metrics(row) for row in rows])),
+            }
+            for key, name, rows in capability_groups(results)
+        ],
         "results": [asdict(row) for row in results],
     }
     json_path = directory / f"review-eval-{tool}-{stamp}.json"
@@ -94,10 +128,11 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
         "Judge verdict = whether that comment asserts the expected finding (not the comment itself).",
         "Recall = expected findings asserted / expected findings. "
         "Precision = PR comments that support an asserted finding / all PR comments.",
+        "Capability is the review-tool skill the case is measuring.",
         "Isolated is yes if only the selected review bot commented.",
         "",
-        "| Case | Isolated | P | R | F1 | Expected finding | Actual PR comment | Judge verdict | PR |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Case | Isolated | P | R | F1 | Capability | Intent | Expected finding | Actual PR comment | Judge verdict | PR |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in results:
         metrics = result_metrics(row)
@@ -111,8 +146,20 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
         lines.append(
             f"| {row.case_id} | {isolation_label(row)} | "
             f"{pct(metrics.precision)} | {pct(metrics.recall)} | {pct(metrics.f1)} | "
-            f"{_cell(expected, 180)} | {_cell(actual, 180)} | {_cell(verdicts, 160)} | {row.pr_url} |"
+            f"{_cell(row.capability or '—', 80)} | {_cell(row.intent or row.case_id, 120)} | "
+            f"{_cell(expected, 140)} | "
+            f"{_cell(actual, 140)} | {_cell(verdicts, 120)} | {row.pr_url} |"
         )
+
+    lines.extend(["", "## By capability", "", "| Capability | Cases | P | R | F1 | What we ask of the tool |", "|---|---|---|---|---|---|"])
+    for key, name, rows in capability_groups(results):
+        grouped = aggregate_metrics([result_metrics(row) for row in rows])
+        asks = next((row.capability_asks for row in rows if row.capability_asks), "")
+        lines.append(
+            f"| {name} | {len(rows)} | {pct(grouped.precision)} | {pct(grouped.recall)} | "
+            f"{pct(grouped.f1)} | {_cell(asks, 200)} |"
+        )
+        _ = key
 
     lines.extend(["", "## Case details", ""])
     for row in results:
@@ -122,6 +169,22 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
         lines.append(f"### {row.case_id} — {status}")
         lines.append("")
         lines.append(f"PR: {row.pr_url}")
+        if row.intent:
+            lines.append(f"Intent: {row.intent}")
+        if row.capability:
+            lines.append(f"Capability: {row.capability}")
+        if row.capability_asks:
+            lines.append("")
+            lines.append("Review-tool skill this case asks:")
+            lines.append("")
+            lines.append(row.capability_asks)
+            lines.append("")
+        if row.tests:
+            lines.append("")
+            lines.append("What this tests:")
+            lines.append("")
+            lines.append(row.tests)
+            lines.append("")
         lines.append(f"Context: {row.context} (what the tool could see)")
         lines.append(f"Isolated: {isolation_label(row)}")
         lines.append(
@@ -182,13 +245,13 @@ def terminal_summary(results: list[EvalResult]) -> str:
     lines = [
         "",
         "eval cases",
-        f"{'CASE':<42} {'FINDING':<8} {'ISOLATED':<10} {'P':<6} {'R':<6} {'F1':<6}",
+        f"{'CASE':<68} {'FINDING':<8} {'ISOLATED':<10} {'P':<6} {'R':<6} {'F1':<6}",
     ]
     for row in results:
         metrics = result_metrics(row)
         finding = "PASS" if row.finding_passed else "FAIL"
         lines.append(
-            f"{row.case_id:<42} {finding:<8} {isolation_label(row):<10} "
+            f"{row.case_id:<68} {finding:<8} {isolation_label(row):<10} "
             f"{pct(metrics.precision):<6} {pct(metrics.recall):<6} {pct(metrics.f1):<6}"
         )
     passed = sum(1 for row in results if row.finding_passed)

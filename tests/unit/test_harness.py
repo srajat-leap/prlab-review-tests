@@ -18,7 +18,7 @@ def _pass_if_text_mentions(word: str):
 
 
 def test_score_passes_when_judge_accepts_the_claim() -> None:
-    case = next(item for item in load_cases() if item.id == "stats-count-not-out")
+    case = next(item for item in load_cases() if item.id == "test-stats-not-out-display-increments-wickets")
     harness = ReviewHarness(
         tool=GreptileTool(),
         judge=CallableJudge(_pass_if_text_mentions("NOT_OUT")),
@@ -40,7 +40,7 @@ def test_score_passes_when_judge_accepts_the_claim() -> None:
 
 
 def test_score_fails_when_review_does_not_assert_the_claim() -> None:
-    case = next(item for item in load_cases() if item.id == "stats-count-not-out")
+    case = next(item for item in load_cases() if item.id == "test-stats-not-out-display-increments-wickets")
     harness = ReviewHarness(
         tool=GreptileTool(),
         judge=CallableJudge(_pass_if_text_mentions("NOT_OUT")),

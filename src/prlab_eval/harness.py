@@ -20,6 +20,12 @@ class EvalResult:
     pr_url: str
     finding_passed: bool
     isolation_passed: bool
+    intent: str = ""
+    tests: str = ""
+    capability_id: str = ""
+    capability: str = ""
+    capability_asks: str = ""
+    capability_ids: tuple[str, ...] = ()
     claims: list[ClaimVerdict] = field(default_factory=list)
     actual: str = ""
     comments: list[str] = field(default_factory=list)
@@ -70,6 +76,12 @@ class ReviewHarness:
         isolation = check_isolation(review.logins, allowed)
         return EvalResult(
             case_id=case.id,
+            intent=case.intent,
+            tests=case.tests,
+            capability_id=case.capability.id,
+            capability=case.capability.name,
+            capability_asks=case.capability.asks,
+            capability_ids=tuple(item.id for item in case.capabilities),
             context=case.context,
             tool=self.tool.name,
             pr_url=review.pr_url or "",

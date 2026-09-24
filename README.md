@@ -4,12 +4,17 @@ Pass/fail tests for PR review tools on the cricket scoring estate.
 
 Cases describe a product change and the **claim** a review must assert. They are not tied to a vendor. Each tool is a plugin: trigger text, bot login, and optional cluster config.
 
+Every case id starts with `test-` and names the intent (`test-stats-not-out-display-increments-wickets`). `intent` is the one-line goal. `tests` is the cricket trap.
+
+Review-tool skills live in `cases/capabilities.json`. A case points at one or more ids (`"capability": "public-contract-leak"` or `"capabilities": ["public-contract-leak", "persist-leaked-envelope"]`). The same skill can be reused across cases and later tools.
+
 Product repositories stay blind. A product PR must not mention this harness, hop numbers, or expected findings.
 
 ## Layout
 
 ```
-cases/cases.json          # tool-agnostic cases
+cases/capabilities.json   # shared review-tool skills (referenced by id)
+cases/cases.json          # tool-agnostic cases (`capability` is a catalog id)
 patches/                  # code-only diffs
 src/prlab_eval/tools/     # one module per review product
 tests/unit/               # matcher and case tests
@@ -28,6 +33,7 @@ The same case can be scored by any registered tool.
 
 | Column | Meaning |
 |---|---|
+| Capability | The review-tool skill this case measures. Reports also roll up P/R by capability. |
 | Expected finding | The trap. What a correct review must mean. |
 | Actual PR comment | The tool's GitHub comment(s), not the judge. |
 | Judge verdict | Whether those comments assert the expected finding, plus a short reason. |
@@ -50,7 +56,7 @@ pip install -e .
 Case **data** lives in `cases/cases.json`. Each case is one pytest node, so the terminal shows per-case status:
 
 ```
-tests/eval/test_reviews.py::test_review_tool_flags_regression[stats-count-not-out] FAILED
+tests/eval/test_reviews.py::test_review_tool_flags_regression[test-stats-not-out-display-increments-wickets] FAILED
 ```
 
 Do not write one hand-copied test function per trap. Add a JSON case; pytest picks it up.
