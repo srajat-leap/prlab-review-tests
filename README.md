@@ -6,7 +6,7 @@ Cases describe a product change and the **claim** a review must assert. They are
 
 Every case id starts with `test-` and names the intent (`test-stats-not-out-display-increments-wickets`). `intent` is the one-line goal. `tests` is the cricket trap.
 
-Review-tool skills live in `cases/capabilities.json`. A case points at one or more ids (`"capability": "public-contract-leak"` or `"capabilities": ["public-contract-leak", "persist-leaked-envelope"]`). The same skill can be reused across cases and later tools.
+Review-tool skills live in `cases/capabilities.json`. A case points at one or more ids (`"capability": "contract-leak"` or `"capabilities": ["contract-leak", "leak-propagation"]`). The same skill can be reused across cases and later tools. Ids name what the review product can do (cross-repo impact, omitted guard as true), not design principles or cricket-specific bug labels.
 
 Product repositories stay blind. A product PR must not mention this harness, hop numbers, or expected findings.
 
@@ -14,7 +14,7 @@ Product repositories stay blind. A product PR must not mention this harness, hop
 
 ```
 cases/capabilities.json   # shared review-tool skills (referenced by id)
-cases/cases.json          # tool-agnostic cases (`capability` is a catalog id)
+cases/cases.json          # shared traps (`capability` is a catalog id)
 patches/                  # code-only diffs
 src/prlab_eval/tools/     # one module per review product
 tests/unit/               # matcher and case tests
@@ -29,7 +29,7 @@ reports/                  # written by pytest
 | `single-repo` | The PR repo only |
 | `cluster` | The PR repo plus `cluster_repos` (protocol → scoring, stats, fantasy) |
 
-The same case can be scored by any registered tool.
+`--tool` selects the plugin (trigger, bot, cluster context). Cases and capabilities stay shared.
 
 | Column | Meaning |
 |---|---|
@@ -53,7 +53,7 @@ pip install -e .
 
 ## Tests
 
-Case **data** lives in `cases/cases.json`. Each case is one pytest node, so the terminal shows per-case status:
+Case **data** lives in `cases/cases.json`. Each case is one pytest node:
 
 ```
 tests/eval/test_reviews.py::test_review_tool_flags_regression[test-stats-not-out-display-increments-wickets] FAILED

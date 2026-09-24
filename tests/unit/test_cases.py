@@ -9,7 +9,7 @@ from prlab_eval.cases import (
 from prlab_eval.tools import TOOLS
 
 
-def test_cases_are_tool_agnostic() -> None:
+def test_cases_are_shared_across_tools() -> None:
     cases = load_cases()
     assert cases
     for case in cases:
@@ -30,31 +30,34 @@ def test_case_ids_start_with_test_and_describe_intent() -> None:
         assert case.capability.name
         assert case.capability.asks.endswith("?")
         assert case.capabilities[0] is case.capability
+        assert "wicket" in case.tests.lower() or "leak" in case.tests.lower() or "protocol" in case.tests.lower()
 
 
 def test_capabilities_live_in_a_shared_catalog() -> None:
     catalog = load_capabilities()
-    assert "cross-repo-downstream-impact" in catalog
+    assert "cross-repo-impact" in catalog
     used = {item.id for case in load_cases() for item in case.capabilities}
     assert used <= set(catalog)
+    joined = " ".join(f"{item.id} {item.name} {item.asks}" for item in catalog.values()).lower()
+    assert "law of demeter" not in joined
+    assert "law-of-demeter" not in joined
 
 
 def test_case_can_reference_multiple_capability_ids() -> None:
     catalog = load_capabilities()
     ids = capability_ids_for(
-        {"capabilities": ["public-contract-leak", "persist-leaked-envelope"]}
+        {"capabilities": ["contract-leak", "leak-propagation"]}
     )
     resolved = resolve_capabilities(ids, catalog, case_id="example")
     assert [item.id for item in resolved] == [
-        "public-contract-leak",
-        "persist-leaked-envelope",
+        "contract-leak",
+        "leak-propagation",
     ]
 
 
 def test_unknown_capability_id_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown capability"):
         resolve_capabilities(("not-a-skill",), load_capabilities(), case_id="example")
-        assert "wicket" in case.tests.lower() or "leak" in case.tests.lower() or "protocol" in case.tests.lower()
 
 
 def test_cluster_case_lists_sibling_repos() -> None:

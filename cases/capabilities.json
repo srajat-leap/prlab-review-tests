@@ -1,58 +1,34 @@
 {
-  "intra-repo-omission-semantics": {
-    "name": "Intra-repo omission semantics",
-    "asks": "From the changed repo alone, can the tool infer that defaulting a missing field changes a downstream decision?"
+  "local-semantic-consequence": {
+    "name": "Local semantic consequence",
+    "asks": "From the changed repo alone, can the tool infer that a local default or rewrite changes a domain decision — not only that a field has a new value?"
   },
-  "cross-repo-downstream-impact": {
-    "name": "Cross-repo hop / cluster context",
+  "cross-repo-impact": {
+    "name": "Cross-repo impact",
     "asks": "When sibling repos are in context, can the tool connect a local contract change to a named downstream consumer?"
   },
-  "public-contract-leak": {
+  "contract-leak": {
     "name": "Public contract leak",
-    "asks": "Can the tool see that a public response now exposes internal or forbidden fields?"
+    "asks": "Can the tool see that a public response or nested object now exposes internal or forbidden fields?"
   },
-  "nested-dto-reexport": {
-    "name": "Nested DTO re-export",
-    "asks": "Can the tool see that a nested object copies internal fields onto a public contract?"
+  "abstraction-bypass": {
+    "name": "Published-contract bypass",
+    "asks": "Can the tool flag a consumer reading producer internals — a leaked envelope or a nested walk — instead of the agreed public field?"
   },
-  "consumer-bypasses-abstraction": {
-    "name": "Consumer bypasses the source of truth",
-    "asks": "Can the tool flag a consumer reading producer internals instead of the agreed abstraction?"
+  "display-vs-authority": {
+    "name": "Display vs authoritative state",
+    "asks": "Can the tool reject treating a presentation or display value as the source of truth for a decision or side effect?"
   },
-  "law-of-demeter-coupling": {
-    "name": "Law of Demeter / deep coupling",
-    "asks": "Can the tool flag a deep property walk that couples a consumer to another service's internals?"
+  "omitted-guard-as-true": {
+    "name": "Omitted guard treated as true",
+    "asks": "Can the tool catch logic that treats a missing confirmation or guard flag as granted?"
   },
-  "display-vs-source-of-truth": {
-    "name": "Display vs source of truth",
-    "asks": "Can the tool tell a presentation or display value from the authoritative flag and reject treating the display as fact?"
+  "kind-relabel": {
+    "name": "Outcome kind relabel",
+    "asks": "Can the tool catch a classification change that files or publishes one outcome under another kind?"
   },
-  "missing-flag-treated-as-true": {
-    "name": "Missing flag treated as true",
-    "asks": "Can the tool catch logic that treats an omitted confirmation or guard flag as true?"
-  },
-  "outcome-kind-remapping": {
-    "name": "Outcome kind remapping",
-    "asks": "Can the tool catch a classification change that files one outcome under another kind?"
-  },
-  "downstream-kind-propagation": {
-    "name": "Downstream kind propagation",
-    "asks": "Can the tool catch a consumer that turns an upstream kind into a different public outcome?"
-  },
-  "persist-leaked-envelope": {
-    "name": "Persisting a leaked envelope",
-    "asks": "Can the tool see that storing an internal envelope keeps leaked fields in history, not only in the live response?"
-  },
-  "side-effect-on-display": {
-    "name": "Side effect on a display field",
-    "asks": "Can the tool catch a user-visible side effect keyed off a display field instead of the authoritative flag?"
-  },
-  "boundary-filter-regression": {
-    "name": "Boundary filter regression",
-    "asks": "Can the tool catch an edge service that stops stripping internal fields and forwards them downstream?"
-  },
-  "ui-from-nested-optional": {
-    "name": "UI from a nested optional field",
-    "asks": "Can the tool catch a UI that walks a nested optional structure and shows a state the authoritative flag did not grant?"
+  "leak-propagation": {
+    "name": "Leak persistence or pass-through",
+    "asks": "Can the tool see that storing or forwarding an internal envelope keeps leaked fields beyond the producer?"
   }
 }
