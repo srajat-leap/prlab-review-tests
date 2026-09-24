@@ -30,6 +30,7 @@ class EvalResult:
     comments: list[str] = field(default_factory=list)
     metrics: CaseMetrics = field(default_factory=CaseMetrics)
     unexpected_bots: tuple[str, ...] = ()
+    judge_mode: str = "llm"
 
 
 class ReviewError(AssertionError):
@@ -48,6 +49,7 @@ class ReviewHarness:
     wait_seconds: int = 0
     poll_seconds: int = 15
     allow_bots: frozenset[str] = frozenset()
+    judge_mode: str = "llm"
     opened: list[PullRequest] = field(default_factory=list)
 
     def setup(self, case: Case) -> PullRequest:
@@ -90,6 +92,7 @@ class ReviewHarness:
             comments=comments,
             metrics=score_metrics(claims, comments),
             unexpected_bots=isolation.unexpected_bots,
+            judge_mode=self.judge_mode,
         )
 
     def assert_review(self, review: Review, case: Case) -> EvalResult:

@@ -55,8 +55,11 @@ Do not write one hand-copied test function per trap. Add a JSON case; pytest pic
 
 ```bash
 pytest                    # unit tests
+pytest tests/eval --run-eval --tool greptile --fast
 pytest tests/eval --run-eval --tool greptile --judge-provider gemini --cleanup
 ```
+
+`--fast` scores each claim by its token patterns only. No LLM key, no judge pre-check. Use it for a quick pass after reviews have landed. Token match is weaker than the LLM judge and can pass a review that only mentions the keywords.
 
 ## Eval a tool (live GitHub)
 
@@ -72,7 +75,7 @@ python3 -m prlab_eval setup
 python3 -m prlab_eval trigger --tool greptile
 ```
 
-3. **Execute + assert** — collect comments and score claims with a temperature-0 judge. You do not need an OpenAI key. Add `--wait` if reviews are still landing. Add `--cleanup` to close the eval PRs and delete their branches after the report is written.
+3. **Execute + assert** — collect comments and score claims. Default is a temperature-0 LLM judge. Add `--fast` to skip the LLM and score by claim tokens only. Add `--wait` if reviews are still landing. Add `--cleanup` to close the eval PRs and delete their branches after the report is written.
 
 4. **Cleanup** — close leftover eval PRs and delete `eval/*` branches without scoring. Reports stay.
 
@@ -99,7 +102,7 @@ pytest tests/eval --run-eval --tool greptile --judge-provider groq --cleanup
 pytest tests/eval --run-eval --tool greptile --judge-provider groq --judge-model qwen/qwen3.8-27b --cleanup
 ```
 
-Eval pings the judge once before any case. A bad key or model stops the session immediately.
+Eval pings the LLM judge once before any case unless `--fast` is set. A bad key or model stops the session immediately.
 
 ```bash
 python3 -m prlab_eval judge-check --provider openai

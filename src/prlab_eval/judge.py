@@ -151,6 +151,41 @@ class CallableJudge:
         return verdict_for(claim, review_text, asserts=asserts, quote=quote, reason=reason)
 
 
+class TokenJudge:
+    """No-LLM judge: a claim passes if every token pattern appears in the review."""
+
+    name = "fast"
+
+    def judge(self, claim: Claim, review_text: str) -> ClaimVerdict:
+        visible = visible_review_text(review_text)
+        if not claim.tokens:
+            return verdict_for(
+                claim,
+                review_text,
+                asserts=False,
+                quote="",
+                reason="fast: claim has no tokens",
+            )
+        tokens = match_findings(visible, claim.tokens)
+        if not tokens.passed:
+            missed = ", ".join(tokens.missing)
+            return verdict_for(
+                claim,
+                review_text,
+                asserts=False,
+                quote="",
+                reason=f"fast: missing tokens {missed}",
+            )
+        quote = visible[:200] if visible else ""
+        return verdict_for(
+            claim,
+            review_text,
+            asserts=True,
+            quote=quote,
+            reason="fast: all claim tokens present",
+        )
+
+
 @dataclass(frozen=True)
 class JudgeConfig:
     provider: str

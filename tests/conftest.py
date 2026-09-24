@@ -7,7 +7,7 @@ import pytest
 from prlab_eval.cases import load_cases
 from prlab_eval.cleanup import cleanup_eval
 from prlab_eval.harness import EvalResult, ReviewHarness
-from prlab_eval.judge import JudgeConfigError, LlmJudge, precheck_judge
+from prlab_eval.judge import JudgeConfigError, LlmJudge, TokenJudge, precheck_judge
 from prlab_eval.report import terminal_summary, write_reports
 from prlab_eval.tools import TOOLS, get_tool
 
@@ -62,6 +62,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         help="judge model (Groq: openai/gpt-oss-120b, qwen/qwen3.8-27b, or alias gpt-oss / qwen)",
     )
+    group.addoption(
+        "--fast",
+        action="store_true",
+        help="score claims by token match only; skip the LLM judge",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -78,6 +83,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if config.getoption("--run-eval"):
         if not config.getoption("--tool"):
             raise pytest.UsageError("--run-eval requires --tool")
+        if config.getoption("--fast"):
+            return
         try:
             LlmJudge.from_env(
                 model=config.getoption("--judge-model"),
@@ -94,6 +101,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     if not session.config.getoption("--run-eval"):
+        return
+    if session.config.getoption("--fast"):
+        print("fast judge: token match only, no LLM", flush=True)
         return
     judge = LlmJudge.from_env(
         model=session.config.getoption("--judge-model"),
@@ -121,15 +131,19 @@ def harness(tool, request: pytest.FixtureRequest) -> ReviewHarness:
         for item in str(request.config.getoption("--allow-bots")).split(",")
         if item.strip()
     }
+    fast = bool(request.config.getoption("--fast"))
     session = ReviewHarness(
         tool=tool,
-        judge=LlmJudge.from_env(
+        judge=TokenJudge()
+        if fast
+        else LlmJudge.from_env(
             model=request.config.getoption("--judge-model"),
             provider=request.config.getoption("--judge-provider"),
         ),
         trigger=bool(request.config.getoption("--trigger")),
         wait_seconds=int(request.config.getoption("--wait")),
         allow_bots=frozenset(allow),
+        judge_mode="fast" if fast else "llm",
     )
     yield session
 

@@ -130,6 +130,12 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
         "Precision = PR comments that support an asserted finding / all PR comments.",
         "Capability is the review-tool skill the case is measuring.",
         "Isolated is yes if only the selected review bot commented.",
+        (
+            "Judge is token (fast) if --fast scored claims by keyword tokens; "
+            "otherwise a temperature-0 LLM."
+            if any(getattr(row, "judge_mode", "llm") == "fast" for row in results)
+            else "Judge is a temperature-0 LLM."
+        ),
         "",
         "| Case | Isolated | P | R | F1 | Capability | Intent | Expected finding | Actual PR comment | Judge verdict | PR |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
@@ -173,6 +179,8 @@ def write_reports(results: list[EvalResult], tool: str, out_dir: Path | None = N
             lines.append(f"Intent: {row.intent}")
         if row.capability:
             lines.append(f"Capability: {row.capability}")
+        if getattr(row, "judge_mode", "llm") == "fast":
+            lines.append("Judge: token (fast)")
         if row.capability_asks:
             lines.append("")
             lines.append("Review-tool skill this case asks:")

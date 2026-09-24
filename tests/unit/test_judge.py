@@ -1,5 +1,11 @@
 from prlab_eval.cases import Claim
-from prlab_eval.judge import parse_judge_payload, quote_is_from_review, verdict_for, visible_review_text
+from prlab_eval.judge import (
+    TokenJudge,
+    parse_judge_payload,
+    quote_is_from_review,
+    verdict_for,
+    visible_review_text,
+)
 
 
 def test_visible_review_text_strips_html() -> None:
@@ -66,6 +72,30 @@ def test_parse_judge_payload_accepts_fenced_json() -> None:
 def test_parse_judge_payload_extracts_json_from_reasoning() -> None:
     parsed = parse_judge_payload('thinking...\n{"asserts": false, "quote": "", "reason": "no"}\n')
     assert parsed == {"asserts": False, "quote": "", "reason": "no"}
+
+
+def test_token_judge_passes_when_all_tokens_hit() -> None:
+    claim = Claim(
+        id="omitted-confirm-counts-wicket",
+        must_assert="Omitted confirmation counts a wicket.",
+        tokens=("umpire_confirmed", "(omitted|default|missing)", "wicket"),
+    )
+    review = "If umpire_confirmed is omitted, this default counts a wicket."
+    verdict = TokenJudge().judge(claim, review)
+    assert verdict.passed
+    assert verdict.reason.startswith("fast:")
+    assert not verdict.tokens_missing
+
+
+def test_token_judge_fails_when_a_token_is_missing() -> None:
+    claim = Claim(
+        id="omitted-confirm-counts-wicket",
+        must_assert="Omitted confirmation counts a wicket.",
+        tokens=("umpire_confirmed", "wicket"),
+    )
+    verdict = TokenJudge().judge(claim, "The schema default is convenient.")
+    assert not verdict.passed
+    assert "missing tokens" in verdict.reason
 
 
 def test_broadcast_style_quote_passes() -> None:
